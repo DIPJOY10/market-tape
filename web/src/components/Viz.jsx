@@ -40,8 +40,8 @@ export function RangeBar({ px, lo, hi }) {
   );
 }
 
-const HORIZONS = [["2D", "d2"], ["1W", "w1"], ["1M", "m1"], ["3M", "m3"],
-                  ["6M", "m6"], ["YTD", "ytd"], ["1Y", "y1"]];
+const HORIZONS = [["2D", "d2"], ["1W", "w1"], ["3W", "w3"], ["1M", "m1"],
+                  ["3M", "m3"], ["6M", "m6"], ["YTD", "ytd"], ["1Y", "y1"]];
 
 export function MomentumLadder({ row }) {
   const vals = HORIZONS.map(([label, key]) => [label, row[key]]);

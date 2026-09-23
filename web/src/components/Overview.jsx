@@ -72,6 +72,16 @@ export default function Overview({ onJump, wl }) {
           t: r.t, value: fmtPct(r.w1, 0), cls: signClass(r.w1),
           sub: `3M ${fmtPct(r.m3, 0)}`,
         }))],
+      ["Best 3-week momentum",
+        top(cov.filter((r) => r.w3 != null), "w3", true).map((r) => ({
+          t: r.t, value: fmtPct(r.w3, 0), cls: signClass(r.w3),
+          sub: `1W ${fmtPct(r.w1, 0)} \u00b7 3M ${fmtPct(r.m3, 0)}`,
+        }))],
+      ["Weakest 3-week momentum",
+        top(cov.filter((r) => r.w3 != null), "w3", false).map((r) => ({
+          t: r.t, value: fmtPct(r.w3, 0), cls: signClass(r.w3),
+          sub: `1W ${fmtPct(r.w1, 0)} \u00b7 3M ${fmtPct(r.m3, 0)}`,
+        }))],
       ["Weakest 3-month momentum",
         top(cov.filter((r) => r.m3 != null), "m3", false).map((r) => ({
           t: r.t, value: fmtPct(r.m3, 0), cls: signClass(r.m3),

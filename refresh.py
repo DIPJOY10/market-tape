@@ -250,11 +250,21 @@ def chart_blob(pts):
             "yi": ytd_idx}
 
 
-def series_2day(pts):
-    """Exact 2-session change from the real daily closes."""
-    if not pts or len(pts) < 3:
+def series_change(pts, sessions):
+    """Exact change over N trading sessions, from the real daily closes.
+    TradingView publishes 1W/1M/3M but nothing between, so horizons like the
+    2-day and 3-week moves are derived here instead."""
+    if not pts or len(pts) < sessions + 1:
         return None
-    return (pts[-1][1] / pts[-3][1] - 1) * 100
+    return (pts[-1][1] / pts[-1 - sessions][1] - 1) * 100
+
+
+def series_2day(pts):
+    return series_change(pts, 2)
+
+
+def series_3week(pts):
+    return series_change(pts, 15)      # 15 trading sessions ~= three weeks
 
 
 # ------------------------------------------------------------------- scoring
@@ -445,7 +455,9 @@ def export_rows(univ, ratings, hist=None, today=None, series=None):
           "d2": R(series_2day((series or {}).get(v["name"]))
                   or (two_day(hist, v["ticker"], v["px"], today) if hist else None), 1),
           "ch": chart_blob((series or {}).get(v["name"])),
-          "w1": R(v.get("Perf.W"), 1), "m1": R(v.get("Perf.1M"), 1),
+          "w1": R(v.get("Perf.W"), 1),
+          "w3": R(series_3week((series or {}).get(v["name"])), 1),
+          "m1": R(v.get("Perf.1M"), 1),
           "m3": R(v.get("Perf.3M"), 1), "m6": R(v.get("Perf.6M"), 1),
           "y1": R(v.get("Perf.Y"), 1), "rsi": R(v.get("RSI"), 0), "oh": R(v.get("off_high"), 1),
           "hi": R(v.get("price_52_week_high")), "lo": R(v.get("price_52_week_low")),
@@ -525,7 +537,9 @@ def main():
           f"({(BUILD / 'local.html').stat().st_size // 1024} KB)   [open this one]")
     print(f"  wrote {out}   [publish this one as the Artifact]")
     print(f"  {len(rows)} rows from {len(univ):,} screened, {n_acts} rating actions")
-    print(f"  2-day momentum on {have_2d}/{len(rows)} names, charts on {have_sp}")
+    have_3w = sum(1 for r in rows if r.get("w3") is not None)
+    print(f"  2-day momentum on {have_2d}/{len(rows)} names, 3-week on {have_3w}, "
+          f"charts on {have_sp}")
     print(f"  done in {time.time() - t0:.0f}s")
     cfg = HERE / "artifact.json"
     if cfg.exists():

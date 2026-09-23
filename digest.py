@@ -68,7 +68,7 @@ def main():
     def block(title, rows_, fmt):
         print(f"── {title}")
         for r in rows_:
-            print(f"   {r['t']:<6} {fmt(r):<34} {r['n'][:30]}")
+            print(f"   {r['t']:<6} {fmt(r):<46} {r['n'][:24]}")
         print()
 
     block("LARGEST TARGET UPSIDE",
@@ -88,7 +88,8 @@ def main():
     def mom(r):
         cell = lambda x: "    -" if x is None else f"{x:+5.1f}"
         return (f"2D{cell(r.get('d2'))}  1W{cell(r.get('w1'))}"
-                f"  1M{cell(r.get('m1'))}  3M{cell(r.get('m3'))}")
+                f"  3W{cell(r.get('w3'))}  1M{cell(r.get('m1'))}"
+                f"  3M{cell(r.get('m3'))}")
 
     block("STRONGEST 3-MONTH MOMENTUM",
           sorted((r for r in rows if r.get("m3") is not None and cov(r)),
@@ -99,6 +100,12 @@ def main():
     block("BEST 1-WEEK MOMENTUM",
           sorted((r for r in rows if r.get("w1") is not None and cov(r)),
                  key=lambda r: -r["w1"])[:5], mom)
+    block("BEST 3-WEEK MOMENTUM",
+          sorted((r for r in rows if r.get("w3") is not None and cov(r)),
+                 key=lambda r: -r["w3"])[:5], mom)
+    block("WEAKEST 3-WEEK MOMENTUM",
+          sorted((r for r in rows if r.get("w3") is not None and cov(r)),
+                 key=lambda r: r["w3"])[:5], mom)
 
     print("Percentile rankings of published numbers — not investment advice.")
     return 0
