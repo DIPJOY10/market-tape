@@ -11,9 +11,10 @@
 
 set -euo pipefail
 DIR="$HOME/market-tape"
+MARKET="${MARKET_TAPE_MARKET:-us}"   # us | in  (see markets.py)
 PY="$(command -v python3 || echo /usr/bin/python3)"
 
-if ! "$PY" "$DIR/fresh.py" 4 >/dev/null 2>&1; then
-  "$PY" "$DIR/refresh.py" >/tmp/market-tape.log 2>&1 || true
+if ! "$PY" "$DIR/fresh.py" 4 "$MARKET" >/dev/null 2>&1; then
+  "$PY" "$DIR/refresh.py" --market "$MARKET" >/tmp/market-tape.log 2>&1 || true
 fi
-"$PY" "$DIR/digest.py"
+"$PY" "$DIR/digest.py" "$MARKET"

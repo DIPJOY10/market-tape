@@ -1,3 +1,5 @@
+import { CURRENCY, CAP_UNITS } from "./data.js";
+
 export const DASH = "–";
 
 export function num(x) {
@@ -6,7 +8,7 @@ export function num(x) {
 
 export function fmtP(x) {
   if (num(x) === null) return DASH;
-  return "$" + (Math.abs(x) >= 100
+  return CURRENCY + (Math.abs(x) >= 100
     ? x.toLocaleString(undefined, { maximumFractionDigits: 0 })
     : x.toFixed(2));
 }
@@ -18,6 +20,12 @@ export function fmtMoney(x) {
 
 export function fmtCap(x) {
   if (!x) return DASH;
+  if (CAP_UNITS === "indian") {
+    // What the market itself quotes: 1 crore = 1e7, 1 lakh crore = 1e12.
+    if (x >= 1e12) return (x / 1e12).toFixed(2) + "L Cr";
+    if (x >= 1e7) return Math.round(x / 1e7).toLocaleString() + " Cr";
+    return Math.round(x / 1e5).toLocaleString() + " L";
+  }
   if (x >= 1e12) return (x / 1e12).toFixed(2) + "T";
   if (x >= 1e9) return (x / 1e9).toFixed(0) + "B";
   return (x / 1e6).toFixed(0) + "M";

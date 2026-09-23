@@ -10,6 +10,8 @@ git clone https://github.com/DIPJOY10/market-tape.git
 cd market-tape
 python3 refresh.py      # pull the data (~40s, no API keys)
 python3 serve.py        # open it, with the watchlist saved to disk
+
+python3 refresh.py --market in && python3 serve.py --market in --port 8812   # India
 ```
 
 `refresh.py` needs nothing but the Python standard library. Node is only needed if you
@@ -63,11 +65,13 @@ into a list called "My watchlist" rather than being dropped.
 ## Commands
 
 ```bash
-python3 refresh.py               # full pull -> build/local.html + build/index.html
-python3 refresh.py --no-charts   # skip 5y price history: faster, much smaller page
-python3 serve.py --port 8811     # serve it + SQLite watchlist API
-python3 digest.py                # plain-text top picks and metric extremes
-python3 fresh.py 4               # exit 0 if cached data is under 4 hours old
+python3 refresh.py                   # full US pull -> build/us/
+python3 refresh.py --market in       # India -> build/in/
+python3 refresh.py --no-charts       # skip 5y price history: faster, smaller page
+python3 serve.py --port 8811         # serve the US build + watchlist API
+python3 serve.py --market in --port 8812   # serve India alongside it
+python3 digest.py [market]           # plain-text top picks and metric extremes
+python3 fresh.py 4 [market]          # exit 0 if cached data is under 4 hours old
 ```
 
 ## Changing the UI
@@ -97,6 +101,42 @@ Raycast → Settings → **Extensions** → **+** → **Add Script Directory** �
 | **Market Tape Top Picks** | Prints picks and metric extremes as text, no browser |
 
 The scripts assume the repo is at `~/market-tape`. Edit `DIR` at the top of each if not.
+
+## Markets
+
+Two profiles ship today, and the pipeline is driven entirely by them:
+
+| Code | Market | Currency | Universe | Chart symbols |
+|---|---|---|---|---|
+| `us` | United States | USD, T/B/M | NASDAQ, NYSE, AMEX | `NVDA` |
+| `in` | India | INR, lakh crore | NSE | `RELIANCE.NS` |
+
+Each market builds to `build/<code>/` and caches to `cache/<code>/`, so they never
+collide. The UI takes its currency symbol, market-cap units, tier labels and macro
+tape from whichever profile produced the data — nothing about dollars is hardcoded in
+the frontend.
+
+Watchlist rows carry the market they came from, so one list can hold names from both.
+
+### Adding a market
+
+Add an entry to `MARKETS` in `markets.py`. Nothing else should need editing:
+
+| Field | What it drives |
+|---|---|
+| `scanner`, `market` | the TradingView scanner endpoint and query body |
+| `currency`, `symbol`, `cap_units` | how prices and market caps are printed |
+| `yahoo_suffix`, `yahoo_dot` | how a ticker is spelled for the chart endpoint |
+| `floor`, `small_floor`, `min_volume` | the two screening sweeps |
+| `tiers` | cap-tier thresholds *in local currency* and their labels |
+| `macro` | the symbols on the tape, and which are headwinds |
+| `ai` | the ticker set the "AI-linked only" filter matches |
+| `big_cap_always`, `rating_scan_cap` | which names are always kept and headline-scanned |
+
+Worth checking first, since these are what usually break: that the scanner endpoint
+returns rows for your market, that Yahoo resolves a sample ticker with your suffix,
+and that the news endpoint returns headlines for an exchange-prefixed symbol. All
+three are plain HTTP and take a minute to verify with `curl`.
 
 ## How the scoring works
 
@@ -137,8 +177,9 @@ fresh.py              freshness probe
 page.tmpl.html        the built UI, committed so refreshing needs no Node
 web/                  React + Vite source for that template
 raycast/              three Raycast script commands
-build/                generated; local.html is what you open
-cache/                rows, tape, sectors, meta, accumulated daily closes
+markets.py            market profiles: currency, tiers, macro tape, ticker spelling
+build/<market>/       generated; local.html is what you open
+cache/<market>/       rows, tape, sectors, meta, accumulated daily closes
 watchlist.db          your watchlist (gitignored)
 ```
 

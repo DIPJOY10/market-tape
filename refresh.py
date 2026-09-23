@@ -10,15 +10,16 @@ universe, scans headlines for analyst rating actions, and writes build/index.htm
 Then republish that file to the artifact URL in artifact.json to update it in place.
 No API key required. Takes roughly 1-2 minutes, mostly the news scan.
 """
-import bisect, datetime, json, math, os, pathlib, re, sys, time, urllib.parse, urllib.request
+import argparse, bisect, datetime, json, math, pathlib, re, time, urllib.parse, urllib.request
+
+import markets
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
-NO_CHARTS = "--no-charts" in sys.argv   # skip the per-symbol price history fetch
-
 HERE = pathlib.Path(__file__).resolve().parent
-CACHE = HERE / "cache"; CACHE.mkdir(exist_ok=True)
-BUILD = HERE / "build"; BUILD.mkdir(exist_ok=True)
+CACHE = HERE / "cache"        # per-market subdirectory chosen in main()
+BUILD = HERE / "build"
+P = markets.get(markets.DEFAULT)   # active market profile
 UA = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
 
 COLS = ["name","description","close","change","market_cap_basic","sector","industry",
@@ -32,12 +33,6 @@ COLS = ["name","description","close","change","market_cap_basic","sector","indus
  "RSI","price_52_week_high","price_52_week_low","Perf.W","Perf.1M","Perf.3M","Perf.6M","Perf.YTD","Perf.Y",
  "SMA50","SMA200",
  "beta_1_year","earnings_release_next_date"]
-
-AI = set(("NVDA AMD AVGO TSM MU ARM MRVL INTC QCOM TXN ADI NXPI ON LSCC CRDO ALAB MPWR SNPS CDNS "
- "ASML AMAT LRCX KLAC TER ENTG NVMI MSFT GOOGL AMZN META ORCL IBM AAPL CRM NOW SNOW MDB DDOG CRWD "
- "PANW APP S ESTC GTLB PATH ADBE ANET CIEN COHR LITE VRT SMCI DELL HPE WDC STX APH FN CLS NTAP JBL "
- "CRWV NBIS IREN EQIX DLR OKLO SMR VST CEG TLN GEV ETN PWR NRG PLTR SNDK AI BBAI SOUN TEM").split())
-
 
 def post(market, payload):
     req = urllib.request.Request(f"https://scanner.tradingview.com/{market}/scan",
@@ -54,7 +49,8 @@ def screen(lo, hi=None, min_vol=None, pages=6, size=400):
         flt.append({"left": "average_volume_30d_calc", "operation": "egreater", "right": min_vol})
     out = {}
     for p in range(pages):
-        r = post("america", {"filter": flt, "options": {"lang": "en"}, "markets": ["america"],
+        r = post(P["scanner"], {"filter": flt, "options": {"lang": "en"},
+                                "markets": [P["market"]],
                              "symbols": {"query": {"types": []}, "tickers": []}, "columns": COLS,
                              "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
                              "range": [p * size, (p + 1) * size]})
@@ -68,8 +64,8 @@ def screen(lo, hi=None, min_vol=None, pages=6, size=400):
 
 def fetch_universe():
     print("  fetching universe ...", flush=True)
-    u = screen(1_500_000_000)
-    u.update(screen(300_000_000, 1_500_000_000, min_vol=150_000, pages=4))
+    u = screen(P["floor"])
+    u.update(screen(P["small_floor"], P["floor"], min_vol=P["min_volume"], pages=4))
     print(f"    {len(u)} stocks")
     return u
 
@@ -77,29 +73,14 @@ def fetch_universe():
 # ---------------------------------------------------------------- macro tape
 # (symbol, label, unit, headwind) - headwind marks series where "up" is a
 # drag on equities, so a rising print is not coloured green.
-MACRO = [("SP:SPX", "S&P 500", "", False), ("NASDAQ:NDX", "Nasdaq 100", "", False),
-         ("CBOE:VIX", "VIX", "", True), ("TVC:US02Y", "US 2Y", "%", True),
-         ("TVC:US10Y", "US 10Y", "%", True), ("TVC:US30Y", "US 30Y", "%", True),
-         ("NYMEX:CL1!", "Crude", "$", True), ("TVC:GOLD", "Gold", "$", False),
-         ("TVC:DXY", "Dollar (DXY)", "", False),
-         ("ECONOMICS:USINTR", "Fed funds", "%", True),
-         ("ECONOMICS:USIRYY", "CPI y/y", "%", True),
-         ("ECONOMICS:USUR", "Unemployment", "%", True)]
-
-# Economic series carry no meaningful YTD/daily change, so label them with a
-# static descriptor rather than a percentage that reads as a market move.
-ECON_SUB = {"ECONOMICS:USINTR": "target upper bound",
-            "ECONOMICS:USIRYY": "year over year",
-            "ECONOMICS:USUR": "U-3 rate"}
-
 def fetch_macro():
     print("  fetching macro ...", flush=True)
     cols = ["close", "change", "Perf.YTD", "Perf.Y"]
-    tks = [m[0] for m in MACRO]
+    tks = [m[0] for m in P["macro"]]
     r = post("global", {"symbols": {"tickers": tks, "query": {"types": []}}, "columns": cols})
     got = {row["s"]: dict(zip(cols, row["d"])) for row in r["data"]}
     tape = []
-    for tk, label, unit, headwind in MACRO:
+    for tk, label, unit, headwind in P["macro"]:
         d = got.get(tk)
         if not d or d.get("close") is None:
             continue
@@ -107,8 +88,8 @@ def fetch_macro():
         val = (f"${c:,.2f}" if unit == "$" else f"{c:,.2f}%" if unit == "%" and c < 20
                else f"{c:,.2f}")
         sub, cls = "", "fl"
-        if tk in ECON_SUB:
-            sub = ECON_SUB[tk]
+        if tk in markets.ECON_SUB:
+            sub = markets.ECON_SUB[tk]
         else:
             ytd = d.get("Perf.YTD")
             if ytd is not None:
@@ -192,7 +173,7 @@ def fetch_series(rows, workers=16):
     print(f"  fetching 5y price history for {len(rows)} symbols ...", flush=True)
 
     def one(name):
-        sym = name.replace(".", "-")          # BRK.B -> BRK-B, Yahoo's spelling
+        sym = markets.yahoo_symbol(P, name)   # BRK.B -> BRK-B, RELIANCE -> RELIANCE.NS
         try:
             req = urllib.request.Request(YAHOO.format(urllib.parse.quote(sym)),
                                          headers={"User-Agent": "Mozilla/5.0"})
@@ -302,8 +283,7 @@ def score(U, now_ts):
         ed = num(v["earnings_release_next_date"])
         v["earn_in"] = round((ed - now_ts) / 86400) if ed else None
         v["mc"] = num(v["market_cap_basic"]) or 0
-        v["tier"] = ("Mega" if v["mc"] >= 2e11 else "Large" if v["mc"] >= 1e10
-                     else "Mid" if v["mc"] >= 2e9 else "Small")
+        v["tier"] = markets.tier_of(P, v["mc"])
 
     by_sec = defaultdict(list)
     for v in univ: by_sec[v["sector"] or "?"].append(v)
@@ -407,7 +387,7 @@ def sector_table(univ):
     import statistics as st
     g = defaultdict(list)
     for v in univ:
-        if v["mc"] >= 2e9 and v.get("sector"): g[v["sector"]].append(v)
+        if v["mc"] >= P["tiers"][2][1] and v.get("sector"): g[v["sector"]].append(v)
     rows = []
     for sec, rs in g.items():
         if len(rs) < 5: continue
@@ -427,18 +407,19 @@ def R(x, p=2):
 def export_rows(univ, ratings, hist=None, today=None, series=None):
     ok = lambda v: v["SCORE"] is not None and (v.get("recommendation_total") or 0) >= 4
     sel = {}
-    for t, capn in (("Mega", 99), ("Large", 130), ("Mid", 130), ("Small", 90)):
+    caps = {"Mega": 99, "Large": 130, "Mid": 130, "Small": 90}
+    for t, capn in ((name, caps.get(name, 100)) for name, _, _ in P["tiers"]):
         for v in sorted((x for x in univ if x["tier"] == t and ok(x)),
                         key=lambda x: -x["SCORE"])[:capn]:
             sel[v["ticker"]] = v
     for v in univ:
-        if (v["mc"] >= 1.0e11 or v["name"] in AI) and v["SCORE"] is not None:
+        if (v["mc"] >= P["big_cap_always"] or v["name"] in P["ai"]) and v["SCORE"] is not None:
             sel[v["ticker"]] = v
     rows = []
     for v in sel.values():
         acts = ratings.get(v["ticker"], [])
         rows.append({"t": v["name"], "n": v["description"], "sec": v["sector"], "ind": v["industry"],
-          "tier": v["tier"], "ai": 1 if v["name"] in AI else 0,
+          "tier": v["tier"], "ai": 1 if v["name"] in P["ai"] else 0,
           "mc": R(v["mc"], 0), "px": R(v["px"]), "tgt": R(v.get("price_target_1y")),
           "tgH": R(v.get("price_target_high")), "tgL": R(v.get("price_target_low")),
           "up": R(v.get("upside"), 1), "rec": R(v.get("recommendation_mark")),
@@ -487,26 +468,40 @@ def strip_for_artifact(html):
 
 
 def main():
+    global P, CACHE, BUILD
+    ap = argparse.ArgumentParser(description="Market Tape data pipeline")
+    ap.add_argument("--market", default=markets.DEFAULT, choices=sorted(markets.MARKETS),
+                    help="which market profile to pull (default: %(default)s)")
+    ap.add_argument("--no-charts", action="store_true",
+                    help="skip the per-symbol price history fetch")
+    args = ap.parse_args()
+
+    P = markets.get(args.market)
+    CACHE = HERE / "cache" / P["code"]
+    BUILD = HERE / "build" / P["code"]
+    CACHE.mkdir(parents=True, exist_ok=True)
+    BUILD.mkdir(parents=True, exist_ok=True)
+
     t0 = time.time()
     now = datetime.datetime.now()
-    print("Market Tape refresh")
+    print(f"Market Tape refresh - {P['label']} ({P['currency']})")
     U = fetch_universe()
     tape = fetch_macro()
     univ = score(U, now.timestamp())
     cands, seen = [], set()
-    for t in ("Mega", "Large", "Mid", "Small"):
+    for t, _, _ in P["tiers"]:
         rs = sorted((v for v in univ if v["tier"] == t and v["SCORE"] is not None),
                     key=lambda v: -v["SCORE"])[:60]
         for v in rs:
             if v["ticker"] not in seen: seen.add(v["ticker"]); cands.append(v)
     for v in univ:
-        if v["mc"] >= 1.5e11 and v["ticker"] not in seen:
+        if v["mc"] >= P["rating_scan_cap"] and v["ticker"] not in seen:
             seen.add(v["ticker"]); cands.append(v)
     ratings, n_acts = fetch_ratings(cands)
     today = now.date().isoformat()
     hist = update_history(load_history(), univ, today)
     rows = export_rows(univ, ratings, hist, today)          # symbol set only
-    series = {} if NO_CHARTS else fetch_series(rows)
+    series = {} if args.no_charts else fetch_series(rows)
     rows = export_rows(univ, ratings, hist, today, series)  # with charts + exact 2D
     json.dump(hist, open(CACHE / "history.json", "w"), separators=(",", ":"))
     have_2d = sum(1 for r in rows if r.get("d2") is not None)
@@ -520,7 +515,11 @@ def main():
     tmpl = tmpl_path.read_text()
     meta = {"asof": now.strftime("%-d %b %Y"),
             "genat": now.strftime("%-d %b %Y, %-I:%M%p").lower(),
-            "rows": len(rows), "universe": len(univ), "actions": n_acts}
+            "rows": len(rows), "universe": len(univ), "actions": n_acts,
+            "market": P["code"], "marketLabel": P["label"],
+            "currency": P["currency"], "symbol": P["symbol"],
+            "capUnits": P["cap_units"],
+            "tiers": [[name, label] for name, _, label in P["tiers"]]}
     html = (tmpl.replace("__ROWS__", json.dumps(rows, separators=(",", ":")))
                 .replace("__TAPE__", json.dumps(tape, separators=(",", ":")))
                 .replace("__SECT__", json.dumps(sect, separators=(",", ":")))
@@ -532,7 +531,8 @@ def main():
     json.dump(tape, open(CACHE / "tape.json", "w"), indent=1)
     json.dump(sect, open(CACHE / "sect.json", "w"), indent=1)
     json.dump({"generated": now.isoformat(), "universe": len(univ), "rows": len(rows),
-               "actions": n_acts}, open(CACHE / "meta.json", "w"), indent=1)
+               "actions": n_acts, "market": P["code"], "label": P["label"]},
+              open(CACHE / "meta.json", "w"), indent=1)
     print(f"\n  wrote {BUILD / 'local.html'}  "
           f"({(BUILD / 'local.html').stat().st_size // 1024} KB)   [open this one]")
     print(f"  wrote {out}   [publish this one as the Artifact]")

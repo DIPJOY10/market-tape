@@ -4,7 +4,8 @@ Used by the Raycast "Market Tape Top Picks" command; also fine on its own."""
 import datetime, json, pathlib, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-CACHE = HERE / "cache"
+MARKET = next((a for a in sys.argv[1:] if not a.startswith("-")), "us")
+CACHE = HERE / "cache" / MARKET
 
 def load(name, default=None):
     f = CACHE / name
@@ -28,7 +29,7 @@ def main():
     rows = load("rows.json")
     meta = load("meta.json", {})
     if not rows:
-        print("No data yet. Run:  python3 ~/market-tape/refresh.py")
+        print(f"No data yet. Run:  python3 ~/market-tape/refresh.py --market {MARKET}")
         return 1
 
     gen = meta.get("generated", "")
@@ -40,7 +41,7 @@ def main():
     except Exception:
         when = gen or "unknown"
 
-    print(f"MARKET TAPE  ·  data pulled {when}")
+    print(f"MARKET TAPE {meta.get('label', MARKET).upper()}  ·  data pulled {when}")
     print(f"{meta.get('universe', '?'):,} stocks screened  ·  {meta.get('rows', '?')} in the table"
           f"  ·  {meta.get('actions', '?')} rating actions\n")
 

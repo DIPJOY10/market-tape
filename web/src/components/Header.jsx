@@ -1,16 +1,16 @@
 import React from "react";
-import { TAPE } from "../data.js";
+import { TAPE, MARKET } from "../data.js";
 
 export default function Header({ meta }) {
   return (
     <header className="top">
       <div className="top-in">
         <div className="eyebrow">
-          US equities &middot; live TradingView data &middot; {meta.asof || ""}
+          {MARKET} equities &middot; live TradingView data &middot; {meta.asof || ""}
         </div>
         <h1>Market Tape 2026</h1>
         <p className="sub">
-          {meta.rows || 0} US-listed stocks from mega to small cap, scored on value, quality,
+          {meta.rows || 0} listed stocks from mega to small cap, scored on value, quality,
           growth, momentum and sell-side sentiment. Every price, target and fundamental is
           pulled live &mdash; open any row for charts, competitors and recent analyst actions.
         </p>

@@ -20,9 +20,15 @@ export const byTicker = new Map(ROWS.map((r) => [r.t, r]));
 
 export const SECTORS = [...new Set(ROWS.map((r) => r.sec).filter(Boolean))].sort();
 
-export const TIERS = [
-  ["Mega", ">$200B"], ["Large", "$10–200B"], ["Mid", "$2–10B"], ["Small", "<$2B"],
-];
+// Currency and tier labels come from the active market profile, so the UI reads
+// correctly whether the pipeline pulled US dollars or Indian rupees.
+export const CURRENCY = META.symbol || "$";
+export const CAP_UNITS = META.capUnits || "western";
+export const MARKET = META.marketLabel || "United States";
+
+export const TIERS = META.tiers && META.tiers.length
+  ? META.tiers
+  : [["Mega", ">$200B"], ["Large", "$10-200B"], ["Mid", "$2-10B"], ["Small", "<$2B"]];
 
 // Shared gate for "top picks": profitable, covered, not over-levered.
 export function eligible(r) {

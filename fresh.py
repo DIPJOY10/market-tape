@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Exit 0 if the cached data is younger than N hours, 1 if it is stale or missing.
-    python3 fresh.py 4
+    python3 fresh.py 4 [market]
 Also prints a human-readable age on stdout."""
 import datetime, json, pathlib, sys
 
-hours = float(sys.argv[1]) if len(sys.argv) > 1 else 4.0
-meta = pathlib.Path(__file__).resolve().parent / "cache" / "meta.json"
+args = [a for a in sys.argv[1:] if not a.startswith("-")]
+hours = float(args[0]) if args else 4.0
+market = args[1] if len(args) > 1 else "us"
+meta = pathlib.Path(__file__).resolve().parent / "cache" / market / "meta.json"
 if not meta.exists():
     print("no data yet"); sys.exit(1)
 try:

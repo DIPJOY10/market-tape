@@ -15,8 +15,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
 
 HERE = pathlib.Path(__file__).resolve().parent
-BUILD = HERE / "build"
+BUILD = HERE / "build"          # narrowed to the chosen market in main()
 DB = HERE / "watchlist.db"
+MARKET = "us"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lists (
@@ -27,41 +28,23 @@ CREATE TABLE IF NOT EXISTS lists (
 CREATE TABLE IF NOT EXISTS watchlist (
   list_id     INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
   ticker      TEXT NOT NULL,
+  market      TEXT NOT NULL DEFAULT 'us',
   added_at    TEXT NOT NULL,
   added_price REAL,
   note        TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (list_id, ticker)
+  PRIMARY KEY (list_id, market, ticker)
 );
 CREATE TABLE IF NOT EXISTS snapshots (
   ticker TEXT NOT NULL,
+  market TEXT NOT NULL DEFAULT 'us',
   ts     TEXT NOT NULL,
   price  REAL,
-  PRIMARY KEY (ticker, ts)
+  PRIMARY KEY (ticker, market, ts)
 );
-CREATE INDEX IF NOT EXISTS idx_snap_ticker ON snapshots(ticker, ts);
+CREATE INDEX IF NOT EXISTS idx_snap_ticker ON snapshots(ticker, market, ts);
 """
 
 DEFAULT_LIST = "My watchlist"
-
-
-def migrate(con):
-    """Single-list databases predate named lists. Move their rows into a default
-    list rather than dropping them."""
-    cols = {r["name"] for r in con.execute("PRAGMA table_info(watchlist)")}
-    if not cols or "list_id" in cols:
-        return
-    old = [dict(r) for r in con.execute(
-        "SELECT ticker, added_at, added_price, note FROM watchlist")]
-    con.execute("ALTER TABLE watchlist RENAME TO watchlist_legacy")
-    con.executescript(SCHEMA)
-    lid = ensure_default(con)
-    con.executemany(
-        "INSERT OR IGNORE INTO watchlist(list_id, ticker, added_at, added_price, note)"
-        " VALUES(?,?,?,?,?)",
-        [(lid, r["ticker"], r["added_at"] or "", r["added_price"], r["note"] or "")
-         for r in old])
-    con.execute("DROP TABLE watchlist_legacy")
-    print(f"  migrated {len(old)} saved names into '{DEFAULT_LIST}'")
 
 
 def ensure_default(con):
@@ -71,6 +54,41 @@ def ensure_default(con):
     cur = con.execute("INSERT INTO lists(name, created_at) VALUES(?, datetime('now'))",
                       (DEFAULT_LIST,))
     return cur.lastrowid
+
+
+def migrate(con):
+    """Carry older databases forward rather than dropping them:
+       v1 keyed rows by ticker alone; v2 added named lists; v3 adds the market,
+       so one list can hold names from more than one country."""
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(watchlist)")}
+    if not cols or "market" in cols:
+        return
+
+    if "list_id" in cols:                      # v2 -> v3: add market to the key
+        rows = [dict(r) for r in con.execute(
+            "SELECT list_id, ticker, added_at, added_price, note FROM watchlist")]
+        con.execute("DROP TABLE watchlist")
+        con.executescript(SCHEMA)
+        con.executemany(
+            "INSERT OR IGNORE INTO watchlist"
+            "(list_id, ticker, market, added_at, added_price, note) VALUES(?,?,'us',?,?,?)",
+            [(r["list_id"], r["ticker"], r["added_at"] or "", r["added_price"],
+              r["note"] or "") for r in rows])
+        print(f"  moved {len(rows)} saved names onto the multi-market schema")
+        return
+
+    # v1 -> v3: no lists at all yet
+    rows = [dict(r) for r in con.execute(
+        "SELECT ticker, added_at, added_price, note FROM watchlist")]
+    con.execute("DROP TABLE watchlist")
+    con.executescript(SCHEMA)
+    lid = ensure_default(con)
+    con.executemany(
+        "INSERT OR IGNORE INTO watchlist"
+        "(list_id, ticker, market, added_at, added_price, note) VALUES(?,?,'us',?,?,?)",
+        [(lid, r["ticker"], r["added_at"] or "", r["added_price"], r["note"] or "")
+         for r in rows])
+    print(f"  migrated {len(rows)} saved names into '{DEFAULT_LIST}'")
 
 
 _lock = threading.Lock()
@@ -156,8 +174,10 @@ class Handler(BaseHTTPRequestHandler):
                     lid = ensure_default(con)
                 con.execute(
                     "INSERT OR IGNORE INTO watchlist"
-                    "(list_id, ticker, added_at, added_price, note) VALUES(?,?,?,?,?)",
-                    (lid, t, payload.get("added_at") or "", payload.get("added_price"),
+                    "(list_id, ticker, market, added_at, added_price, note)"
+                    " VALUES(?,?,?,?,?,?)",
+                    (lid, t, payload.get("market") or MARKET,
+                     payload.get("added_at") or "", payload.get("added_price"),
                      payload.get("note") or ""))
             return self._json({"ok": True, "ticker": t, "list_id": lid})
 
@@ -232,7 +252,22 @@ class Handler(BaseHTTPRequestHandler):
         parts = [unquote(x) for x in path.strip("/").split("/")]
 
         if path == "/api/health":
-            return self._json({"ok": True})
+            return self._json({"ok": True, "market": MARKET})
+
+        if path == "/api/markets":
+            out = []
+            for d in sorted((HERE / "build").glob("*")):
+                if not (d / "local.html").exists():
+                    continue
+                meta = HERE / "cache" / d.name / "meta.json"
+                label = d.name
+                if meta.exists():
+                    try:
+                        label = json.load(open(meta)).get("label", d.name)
+                    except Exception:
+                        pass
+                out.append({"code": d.name, "label": label, "active": d.name == MARKET})
+            return self._json({"markets": out})
 
         if path == "/api/lists":
             with db() as con:
@@ -248,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
             with db() as con:
                 lid = parts[2] if len(parts) == 3 else ensure_default(con)
                 rows = [dict(r) for r in con.execute(
-                    "SELECT ticker, added_at, added_price, note FROM watchlist"
+                    "SELECT ticker, market, added_at, added_price, note FROM watchlist"
                     " WHERE list_id=? ORDER BY added_at", (lid,))]
             return self._json({"list_id": int(lid), "items": rows})
 
@@ -276,18 +311,26 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    global BUILD, MARKET
+    ap = argparse.ArgumentParser(description="Serve Market Tape with a local watchlist")
     ap.add_argument("--port", type=int, default=8811)
+    ap.add_argument("--market", default="us", help="which built market to serve")
     ap.add_argument("--no-open", action="store_true")
     args = ap.parse_args()
 
+    MARKET = args.market
+    BUILD = HERE / "build" / MARKET
     if not (BUILD / "local.html").exists():
-        raise SystemExit("build/local.html missing - run: python3 refresh.py")
+        built = sorted(d.name for d in (HERE / "build").glob("*")
+                       if (d / "local.html").exists())
+        raise SystemExit(
+            f"build/{MARKET}/local.html missing - run: python3 refresh.py --market {MARKET}"
+            + (f"\nAlready built: {', '.join(built)}" if built else ""))
 
     init_db()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://localhost:{args.port}/"
-    print(f"Market Tape on {url}   (watchlist -> {DB.name})")
+    print(f"Market Tape ({MARKET}) on {url}   (watchlist -> {DB.name})")
     if not args.no_open:
         webbrowser.open(url)
     try:
