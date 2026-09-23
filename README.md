@@ -25,7 +25,7 @@ Five tabs:
 |---|---|
 | **Overview** | Top composite score per cap tier, plus metric extremes: largest target upside, most upgrades and downgrades, cheapest high-quality, best and worst momentum |
 | **The screen** | Every stock, sortable on any column, filterable by tier, sector, AI-linked, profitable, or watchlist-only. Click a row to expand it |
-| **Watchlist** | What you starred, with entry price, days held and performance since you added it |
+| **Watchlist** | Named lists of what you starred, with entry price, days held and performance since you added it |
 | **Sectors** | Median stock per sector across performance, valuation and growth |
 | **Notes** | Hand-written market commentary and the caveats that matter |
 
@@ -37,18 +37,28 @@ price and date axes, rolling 50- and 200-day means computed from the series, and
 crosshair reporting the close, date and change from the range start for any session.
 Daily resolution out to one year, weekly across five.
 
-## Watchlist storage
+## Watchlists
 
-Two backends, chosen at runtime — the app probes for the API and falls back silently:
+Keep as many named lists as you like — create, rename and delete them from the Watchlist
+tab. Starring a name on the screen adds it to whichever list you have open, and the tab
+you were last on is remembered between sessions.
+
+Entries record the price on the day you added them, so the tab shows performance since
+rather than just a list of names.
+
+Two storage backends, chosen at runtime — the app probes for the API and falls back
+silently:
 
 | How you open it | Storage | Survives |
 |---|---|---|
 | `python3 serve.py` | SQLite in `watchlist.db` | browser changes, cleared site data, private windows |
 | `build/local.html` from disk, or published as an Artifact | `localStorage` | that browser only |
 
-Entries record the price on the day you added them, so the Watchlist tab shows
-performance since rather than just a list of names. `serve.py` binds to `127.0.0.1`
-only and is stdlib-only — no Flask, no pip install.
+In the fallback case the tab says so, because clearing site data would erase the lists.
+When they are saved to disk it says nothing — that is the normal case and needs no
+explaining. `serve.py` binds to `127.0.0.1` only and is stdlib-only — no Flask, no pip
+install. A database created before named lists is migrated on first run: its names move
+into a list called "My watchlist" rather than being dropped.
 
 ## Commands
 

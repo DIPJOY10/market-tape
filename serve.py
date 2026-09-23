@@ -19,11 +19,18 @@ BUILD = HERE / "build"
 DB = HERE / "watchlist.db"
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS lists (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS watchlist (
-  ticker      TEXT PRIMARY KEY,
+  list_id     INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+  ticker      TEXT NOT NULL,
   added_at    TEXT NOT NULL,
   added_price REAL,
-  note        TEXT NOT NULL DEFAULT ''
+  note        TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (list_id, ticker)
 );
 CREATE TABLE IF NOT EXISTS snapshots (
   ticker TEXT NOT NULL,
@@ -33,6 +40,38 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_snap_ticker ON snapshots(ticker, ts);
 """
+
+DEFAULT_LIST = "My watchlist"
+
+
+def migrate(con):
+    """Single-list databases predate named lists. Move their rows into a default
+    list rather than dropping them."""
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(watchlist)")}
+    if not cols or "list_id" in cols:
+        return
+    old = [dict(r) for r in con.execute(
+        "SELECT ticker, added_at, added_price, note FROM watchlist")]
+    con.execute("ALTER TABLE watchlist RENAME TO watchlist_legacy")
+    con.executescript(SCHEMA)
+    lid = ensure_default(con)
+    con.executemany(
+        "INSERT OR IGNORE INTO watchlist(list_id, ticker, added_at, added_price, note)"
+        " VALUES(?,?,?,?,?)",
+        [(lid, r["ticker"], r["added_at"] or "", r["added_price"], r["note"] or "")
+         for r in old])
+    con.execute("DROP TABLE watchlist_legacy")
+    print(f"  migrated {len(old)} saved names into '{DEFAULT_LIST}'")
+
+
+def ensure_default(con):
+    row = con.execute("SELECT id FROM lists ORDER BY id LIMIT 1").fetchone()
+    if row:
+        return row["id"]
+    cur = con.execute("INSERT INTO lists(name, created_at) VALUES(?, datetime('now'))",
+                      (DEFAULT_LIST,))
+    return cur.lastrowid
+
 
 _lock = threading.Lock()
 
@@ -45,7 +84,10 @@ def db():
 
 def init_db():
     with db() as con:
+        con.execute("PRAGMA foreign_keys=ON")
         con.executescript(SCHEMA)
+        migrate(con)
+        ensure_default(con)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -90,17 +132,34 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         payload = self._body()
+
+        if path == "/api/lists":
+            name = (payload.get("name") or "").strip()[:60]
+            if not name:
+                return self._json({"error": "name required"}, 400)
+            with _lock, db() as con:
+                try:
+                    cur = con.execute(
+                        "INSERT INTO lists(name, created_at) VALUES(?, datetime('now'))",
+                        (name,))
+                    return self._json({"ok": True, "id": cur.lastrowid, "name": name})
+                except sqlite3.IntegrityError:
+                    return self._json({"error": "a list with that name already exists"}, 409)
+
         if path == "/api/watchlist":
             t = (payload.get("ticker") or "").strip().upper()
+            lid = payload.get("list_id")
             if not t:
                 return self._json({"error": "ticker required"}, 400)
             with _lock, db() as con:
+                if not lid:
+                    lid = ensure_default(con)
                 con.execute(
-                    "INSERT OR IGNORE INTO watchlist(ticker, added_at, added_price, note)"
-                    " VALUES(?,?,?,?)",
-                    (t, payload.get("added_at") or "", payload.get("added_price"),
+                    "INSERT OR IGNORE INTO watchlist"
+                    "(list_id, ticker, added_at, added_price, note) VALUES(?,?,?,?,?)",
+                    (lid, t, payload.get("added_at") or "", payload.get("added_price"),
                      payload.get("note") or ""))
-            return self._json({"ok": True, "ticker": t})
+            return self._json({"ok": True, "ticker": t, "list_id": lid})
 
         if path == "/api/snapshot":
             prices = payload.get("prices") or {}
@@ -108,51 +167,97 @@ class Handler(BaseHTTPRequestHandler):
             if not prices or not ts:
                 return self._json({"error": "ts and prices required"}, 400)
             with _lock, db() as con:
-                watched = {r["ticker"] for r in con.execute("SELECT ticker FROM watchlist")}
-                rows = [(t, ts, p) for t, p in prices.items() if t in watched and p is not None]
+                watched = {r["ticker"] for r in con.execute(
+                    "SELECT DISTINCT ticker FROM watchlist")}
+                rows = [(t, ts, p) for t, p in prices.items()
+                        if t in watched and p is not None]
                 con.executemany(
-                    "INSERT OR REPLACE INTO snapshots(ticker, ts, price) VALUES(?,?,?)", rows)
+                    "INSERT OR REPLACE INTO snapshots(ticker, ts, price) VALUES(?,?,?)",
+                    rows)
             return self._json({"ok": True, "recorded": len(rows)})
 
         return self._json({"error": "not found"}, 404)
 
     def do_DELETE(self):
         path = urlparse(self.path).path
-        if path.startswith("/api/watchlist/"):
-            t = unquote(path[len("/api/watchlist/"):]).upper()
+        parts = [unquote(x) for x in path.strip("/").split("/")]
+
+        # /api/lists/<id>
+        if len(parts) == 3 and parts[1] == "lists":
             with _lock, db() as con:
-                con.execute("DELETE FROM watchlist WHERE ticker=?", (t,))
+                con.execute("PRAGMA foreign_keys=ON")
+                if con.execute("SELECT COUNT(*) FROM lists").fetchone()[0] <= 1:
+                    return self._json({"error": "cannot delete the only list"}, 409)
+                con.execute("DELETE FROM lists WHERE id=?", (parts[2],))
             return self._json({"ok": True})
+
+        # /api/watchlist/<list_id>/<ticker>
+        if len(parts) == 4 and parts[1] == "watchlist":
+            with _lock, db() as con:
+                con.execute("DELETE FROM watchlist WHERE list_id=? AND ticker=?",
+                            (parts[2], parts[3].upper()))
+            return self._json({"ok": True})
+
         return self._json({"error": "not found"}, 404)
 
     def do_PATCH(self):
         path = urlparse(self.path).path
-        if path.startswith("/api/watchlist/"):
-            t = unquote(path[len("/api/watchlist/"):]).upper()
-            note = (self._body().get("note") or "")[:500]
+        parts = [unquote(x) for x in path.strip("/").split("/")]
+        payload = self._body()
+
+        # /api/lists/<id>  -> rename
+        if len(parts) == 3 and parts[1] == "lists":
+            name = (payload.get("name") or "").strip()[:60]
+            if not name:
+                return self._json({"error": "name required"}, 400)
             with _lock, db() as con:
-                con.execute("UPDATE watchlist SET note=? WHERE ticker=?", (note, t))
+                try:
+                    con.execute("UPDATE lists SET name=? WHERE id=?", (name, parts[2]))
+                except sqlite3.IntegrityError:
+                    return self._json({"error": "a list with that name already exists"}, 409)
             return self._json({"ok": True})
+
+        # /api/watchlist/<list_id>/<ticker>  -> note
+        if len(parts) == 4 and parts[1] == "watchlist":
+            note = (payload.get("note") or "")[:500]
+            with _lock, db() as con:
+                con.execute("UPDATE watchlist SET note=? WHERE list_id=? AND ticker=?",
+                            (note, parts[2], parts[3].upper()))
+            return self._json({"ok": True})
+
         return self._json({"error": "not found"}, 404)
 
     # -------------------------------------------------------------- api reads
     def _api_get(self, path):
-        if path == "/api/health":
-            return self._json({"ok": True, "db": DB.name})
+        parts = [unquote(x) for x in path.strip("/").split("/")]
 
-        if path == "/api/watchlist":
+        if path == "/api/health":
+            return self._json({"ok": True})
+
+        if path == "/api/lists":
             with db() as con:
+                ensure_default(con)
+                rows = [dict(r) for r in con.execute(
+                    "SELECT l.id, l.name, l.created_at,"
+                    "       (SELECT COUNT(*) FROM watchlist w WHERE w.list_id = l.id) AS count"
+                    "  FROM lists l ORDER BY l.id")]
+            return self._json({"lists": rows})
+
+        # /api/watchlist or /api/watchlist/<list_id>
+        if parts[:2] == ["api", "watchlist"]:
+            with db() as con:
+                lid = parts[2] if len(parts) == 3 else ensure_default(con)
                 rows = [dict(r) for r in con.execute(
                     "SELECT ticker, added_at, added_price, note FROM watchlist"
-                    " ORDER BY added_at")]
-            return self._json({"items": rows})
+                    " WHERE list_id=? ORDER BY added_at", (lid,))]
+            return self._json({"list_id": int(lid), "items": rows})
 
-        if path.startswith("/api/history/"):
-            t = unquote(path[len("/api/history/"):]).upper()
+        if len(parts) == 3 and parts[1] == "history":
             with db() as con:
                 rows = [dict(r) for r in con.execute(
-                    "SELECT ts, price FROM snapshots WHERE ticker=? ORDER BY ts", (t,))]
-            return self._json({"ticker": t, "points": rows})
+                    "SELECT ts, price FROM snapshots WHERE ticker=? ORDER BY ts",
+                    (parts[2].upper(),))]
+            return self._json({"ticker": parts[2].upper(), "points": rows})
 
         return self._json({"error": "not found"}, 404)
 

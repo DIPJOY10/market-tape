@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { byTicker } from "../data.js";
 import { fmtP, fmtMoney, fmtNum, fmtPct, signClass, recLabel, DASH } from "../format.js";
 import { Sparkline } from "./Viz.jsx";
@@ -31,37 +31,97 @@ export default function Watchlist({ wl, onJump, onChart }) {
     };
   }, [rows]);
 
-  const storeLabel = {
-    loading: "checking storage…",
-    sqlite: "saved to watchlist.db",
-    browser: "saved in this browser only",
-  }[wl.mode];
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [err, setErr] = useState("");
+  const active = wl.lists.find((l) => l.id === wl.activeId);
+
+  const submitNew = async (e) => {
+    e.preventDefault();
+    const res = await wl.createList(draft);
+    if (res && res.error) { setErr(res.error); return; }
+    setDraft(""); setErr(""); setCreating(false);
+  };
+
+  const rename = async () => {
+    const next = prompt("Rename this list", active ? active.name : "");
+    if (next == null) return;
+    const res = await wl.renameList(wl.activeId, next);
+    if (res && res.error) setErr(res.error);
+  };
+
+  const drop = async () => {
+    if (!active) return;
+    if (!confirm("Delete \"" + active.name + "\" and everything on it?")) return;
+    const res = await wl.deleteList(wl.activeId);
+    if (res && res.error) setErr(res.error);
+  };
 
   return (
     <section>
       <div className="shead">
-        <h2>Watchlist</h2>
-        <p>Star any name on the screen and it lands here, with what it has done since you added it.</p>
+        <h2>Watchlists</h2>
+        <p>Star any name on the screen and it lands on the list you have open,
+           with what it has done since you added it.</p>
       </div>
 
-      <div className="wl-head">
-        <span className={"store" + (wl.mode === "sqlite" ? " ok" : "")}>{storeLabel}</span>
-        {wl.mode === "browser" && (
-          <span style={{ color: "var(--muted)", fontSize: 12.5 }}>
-            Run <code>python3 serve.py</code> to keep it in SQLite on disk instead.
-          </span>
+      <div className="wl-bar">
+        <div className="wl-pills" role="tablist" aria-label="Watchlists">
+          {wl.lists.map((l) => (
+            <button key={l.id} className="wl-pill" role="tab"
+                    aria-selected={l.id === wl.activeId}
+                    onClick={() => wl.setActive(l.id)}>
+              {l.name}
+              <span className="ct">
+                {l.id === wl.activeId ? wl.items.length : (l.count ?? 0)}
+              </span>
+            </button>
+          ))}
+        </div>
+        {creating ? (
+          <form className="wl-new" onSubmit={submitNew}>
+            <input autoFocus value={draft} maxLength={60} placeholder="List name"
+                   aria-label="New list name"
+                   onChange={(e) => { setDraft(e.target.value); setErr(""); }} />
+            <button className="btn" type="submit">Create</button>
+            <button className="btn" type="button"
+                    onClick={() => { setCreating(false); setDraft(""); setErr(""); }}>
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <div className="wl-actions">
+            <button className="btn" onClick={() => setCreating(true)}>+ New list</button>
+            {active && <button className="btn" onClick={rename}>Rename</button>}
+            {wl.lists.length > 1 && (
+              <button className="btn danger" onClick={drop}>Delete list</button>
+            )}
+          </div>
         )}
-        {totals && (
+      </div>
+
+      {err && <p className="wl-err">{err}</p>}
+
+      {wl.mode === "browser" && (
+        <p className="wl-warn">
+          These lists are stored in this browser only, and clearing site data will erase
+          them. Open Market Tape with <code>python3 serve.py</code> to keep them saved
+          on your machine.
+        </p>
+      )}
+
+      {totals && (
+        <div className="wl-head">
           <span className="since" style={{ marginLeft: "auto", color: "var(--muted)" }}>
             {totals.n} tracked &middot; {totals.winners} up &middot; average{" "}
             <b className={signClass(totals.avg)}>{fmtPct(totals.avg)}</b> since added
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="wl-empty">
-          <p className="big">Nothing on the watchlist yet</p>
+          <p className="big">Nothing on {active ? active.name : "this list"} yet</p>
           <p>Open <strong>The screen</strong> and click the &#9734; beside any ticker.</p>
           <p style={{ fontSize: 12, marginTop: 10 }}>
             Entries record the price on the day you added them, so this page can show

@@ -289,3 +289,27 @@ footer p{margin:0 0 7px}
 .btn:hover{color:var(--ink);border-color:var(--faint)}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.danger:hover{color:var(--neg);border-color:var(--neg)}
+
+/* ---------- multiple watchlists ---------- */
+.wl-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.wl-pills{display:flex;gap:3px;background:var(--surf2);border:1px solid var(--line);
+  border-radius:6px;padding:3px;flex-wrap:wrap}
+.wl-pill{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--muted);
+  background:none;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.wl-pill:hover{color:var(--ink)}
+.wl-pill[aria-selected=true]{background:var(--accent);color:var(--on-accent)}
+.wl-pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wl-pill .ct{font-family:var(--mono);font-size:10px;background:var(--line2);color:var(--muted);
+  border-radius:8px;padding:1px 6px}
+.wl-pill[aria-selected=true] .ct{background:rgba(0,0,0,.18);color:inherit}
+.wl-new{display:flex;gap:6px;align-items:center;margin-left:auto}
+.wl-new input{font-family:var(--sans);font-size:13px;color:var(--ink);background:var(--surf);
+  border:1px solid var(--line);border-radius:5px;padding:7px 10px;min-width:150px}
+.wl-new input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-s)}
+.wl-actions{margin-left:auto}
+.wl-err{color:var(--neg);font-size:12.5px;margin:0 0 12px}
+.wl-warn{border:1px solid var(--warn);background:var(--warnb);color:var(--ink);
+  border-radius:6px;padding:11px 14px;font-size:12.5px;margin:0 0 14px}
+.wl-warn code{font-family:var(--mono);font-size:11.5px;background:var(--surf);
+  padding:1px 5px;border-radius:3px}
