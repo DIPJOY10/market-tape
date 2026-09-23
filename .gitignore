@@ -1,0 +1,13 @@
+# generated output
+build/
+cache/
+
+# local config: holds a private Claude Artifact URL
+artifact.json
+
+# python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store

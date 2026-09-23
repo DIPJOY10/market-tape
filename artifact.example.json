@@ -1,0 +1,5 @@
+{
+  "url": "https://claude.ai/artifact/REPLACE-WITH-YOUR-ARTIFACT-ID",
+  "title": "Market Tape",
+  "note": "Optional. Only needed if you publish the dashboard as a Claude Artifact. Copy this file to artifact.json and fill in your own URL; artifact.json is gitignored."
+}
