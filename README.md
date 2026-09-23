@@ -1,67 +1,92 @@
 # Market Tape
 
-A live US-equity screener that pulls ~2,700 stocks, scores them on value, quality,
-growth, momentum and sell-side sentiment, and renders a single sortable HTML page —
-with per-symbol price charts, a multi-horizon momentum ladder, competitors and recent
-analyst upgrades and downgrades.
-
-No API keys. No pip installs. Python standard library only.
+A live US-equity screener. Pulls ~2,700 stocks, scores them on value, quality, growth,
+momentum and sell-side sentiment, and renders a tabbed React app with per-symbol charts,
+a multi-horizon momentum ladder, competitors, analyst upgrades and downgrades, and a
+watchlist backed by SQLite.
 
 ```bash
 git clone https://github.com/DIPJOY10/market-tape.git
 cd market-tape
-python3 refresh.py
-open build/local.html
+python3 refresh.py      # pull the data (~40s, no API keys)
+python3 serve.py        # open it, with the watchlist saved to disk
 ```
 
-About 20 seconds for a full run.
+`refresh.py` needs nothing but the Python standard library. Node is only needed if you
+change the UI.
 
 ---
 
-## What you get
+## The app
 
-**The screen** — every stock above $1.5B (plus liquid small caps down to $300M),
-ranked by a composite score. Sort any column, filter by cap tier or sector, search,
-and click any row to expand it.
+Five tabs:
 
-**Per-symbol detail** — a six-month sparkline, position within the 52-week range, a
-momentum ladder spanning 2 days to 1 year, the full metric set, industry competitors,
-and recent analyst actions.
+| Tab | What's on it |
+|---|---|
+| **Overview** | Top composite score per cap tier, plus metric extremes: largest target upside, most upgrades and downgrades, cheapest high-quality, best and worst momentum |
+| **The screen** | Every stock, sortable on any column, filterable by tier, sector, AI-linked, profitable, or watchlist-only. Click a row to expand it |
+| **Watchlist** | What you starred, with entry price, days held and performance since you added it |
+| **Sectors** | Median stock per sector across performance, valuation and growth |
+| **Notes** | Hand-written market commentary and the caveats that matter |
 
-**Full chart view** — click any sparkline to open a chart with selectable ranges
-(1M / 3M / 6M / YTD / 1Y / 5Y), price and date axes, 50- and 200-day moving averages,
-and a crosshair that reports the close, the date and the change from the range start
-for any session. Daily resolution out to one year, weekly across five.
+**Expanded row** — sparkline, 52-week range position, momentum from 2 days to 1 year,
+the full metric set, industry competitors and recent analyst actions.
 
-**Top of the screen** — best composite score per cap tier, plus metric extremes:
-largest target upside, most upgrades, most downgrades, cheapest high-quality names,
-strongest and weakest momentum.
+**Full chart** — click any sparkline for selectable ranges (1M / 3M / 6M / YTD / 1Y / 5Y),
+price and date axes, rolling 50- and 200-day means computed from the series, and a
+crosshair reporting the close, date and change from the range start for any session.
+Daily resolution out to one year, weekly across five.
 
-**Macro tape** — rates across the curve, oil, gold, the dollar, VIX, CPI, unemployment.
+## Watchlist storage
+
+Two backends, chosen at runtime — the app probes for the API and falls back silently:
+
+| How you open it | Storage | Survives |
+|---|---|---|
+| `python3 serve.py` | SQLite in `watchlist.db` | browser changes, cleared site data, private windows |
+| `build/local.html` from disk, or published as an Artifact | `localStorage` | that browser only |
+
+Entries record the price on the day you added them, so the Watchlist tab shows
+performance since rather than just a list of names. `serve.py` binds to `127.0.0.1`
+only and is stdlib-only — no Flask, no pip install.
 
 ## Commands
 
 ```bash
-python3 refresh.py               # full pull, writes build/index.html + build/local.html
-python3 refresh.py --no-charts   # skip price history: faster, and a ~600KB page
-                                 # instead of ~2MB
+python3 refresh.py               # full pull -> build/local.html + build/index.html
+python3 refresh.py --no-charts   # skip 5y price history: faster, much smaller page
+python3 serve.py --port 8811     # serve it + SQLite watchlist API
 python3 digest.py                # plain-text top picks and metric extremes
 python3 fresh.py 4               # exit 0 if cached data is under 4 hours old
 ```
 
+## Changing the UI
+
+The React app lives in `web/`. `refresh.py` does **not** run Vite — it injects data into
+the already-built `page.tmpl.html`, which is committed. So refreshing data needs no Node
+at all. Rebuild only when you change the interface:
+
+```bash
+cd web
+npm install
+npm run build     # vite build, then copies dist/index.html -> ../page.tmpl.html
+npm run dev       # hot reload; the page renders empty until you run refresh.py
+```
+
+The build is a single self-contained HTML file (`vite-plugin-singlefile`): the Claude
+Artifact sandbox cannot fetch sibling assets, and the local path opens straight from disk.
+
 ## Raycast
 
-Raycast → Settings → **Extensions** → **+** → **Add Script Directory** → select
-`raycast/`. Three commands appear:
+Raycast → Settings → **Extensions** → **+** → **Add Script Directory** → select `raycast/`.
 
 | Command | Behaviour |
 |---|---|
-| **Market Tape** | Opens the screen. Re-pulls first if data is over 4h old. |
-| **Refresh Market Tape** | Forces a full re-pull, then opens. |
-| **Market Tape Top Picks** | Prints picks and metric extremes as text, no browser. |
+| **Market Tape** | Opens the screen. Re-pulls if data is over 4h old, starts `serve.py` so the watchlist is SQLite-backed |
+| **Refresh Market Tape** | Forces a full re-pull, then opens |
+| **Market Tape Top Picks** | Prints picks and metric extremes as text, no browser |
 
-The scripts assume the repo lives at `~/market-tape`. Edit `DIR` at the top of each
-if you clone it elsewhere.
+The scripts assume the repo is at `~/market-tape`. Edit `DIR` at the top of each if not.
 
 ## How the scoring works
 
@@ -71,7 +96,7 @@ Quality and growth rank across the whole universe.
 
 | Score | Built from |
 |---|---|
-| **Value** | forward P/E, EV/EBITDA, P/S, FCF yield — all sector-relative |
+| **Value** | forward P/E, EV/EBITDA, P/S, FCF yield — sector-relative |
 | **Quality** | ROIC, operating margin, FCF margin, gross margin, leverage, current ratio |
 | **Growth** | revenue growth TTM and latest quarter, forward EPS growth |
 | **Short term** | 1W / 1M / 3M momentum, analyst sentiment, RSI position |
@@ -87,52 +112,50 @@ Tiers: Mega >$200B · Large $10–200B · Mid $2–10B · Small <$2B.
 | `query1.finance.yahoo.com` | 5y daily price history for charts and exact 2-day moves | none |
 | `news-mediator.tradingview.com` | headlines, parsed for analyst rating actions | none |
 
-These are public, undocumented endpoints. They can change or rate-limit without
-notice, and this project is intended for personal and educational use — check each
-provider's terms before doing anything else with it. Every network call degrades
-gracefully: a symbol that will not resolve simply has no chart.
+These are public, undocumented endpoints. They can change or rate-limit without notice,
+and this project is for personal and educational use — check each provider's terms before
+doing anything else with it. Every network call degrades gracefully: a symbol that will
+not resolve simply has no chart.
 
-## Files
+## Layout
 
 ```
-refresh.py            fetch → score → rate-scan → build
+refresh.py            fetch → score → rate-scan → inject → build
+serve.py              local server + SQLite watchlist API (stdlib only)
 digest.py             plain-text summary of the last pull
 fresh.py              freshness probe
-page.tmpl.html        the page; placeholders filled at build time
+page.tmpl.html        the built UI, committed so refreshing needs no Node
+web/                  React + Vite source for that template
 raycast/              three Raycast script commands
-artifact.example.json optional Claude Artifact URL to republish to
-build/index.html      for publishing as a Claude Artifact (host supplies doctype/head)
-build/local.html      standalone; this is what you open from disk
-cache/                rows, tape, sectors, meta and accumulated daily closes
+build/                generated; local.html is what you open
+cache/                rows, tape, sectors, meta, accumulated daily closes
+watchlist.db          your watchlist (gitignored)
 ```
-
-`build/` and `cache/` are generated and gitignored.
 
 ## What does not auto-update
 
-Two sections of `page.tmpl.html` are hand-written prose: the "what's driving this
-market" themes and the caveat notes. They carry a visible date stamp. If the market
-moves meaningfully they will contradict the live tables above them — rewrite them or
-delete them.
+The **Notes** tab is hand-written prose carrying a visible date stamp. Everything else
+regenerates on every pull. If the market has moved, rewrite or delete those notes — they
+will otherwise contradict the live tables beside them.
 
 ## Known limits
 
 - **Competitor sets come from TradingView's industry classification** and are sometimes
   wrong — insurers filed under "Technology Services", storage grouped with networking.
-- **Trailing P/E can be flattered by one-off gains.** Check `pe` against operating
-  margin before believing a cheap headline multiple.
-- **A low multiple on peak cyclical earnings is not value.** Memory, refining and
-  shipping names routinely screen at 5–13× forward at the top of their cycle.
+- **Trailing P/E can be flattered by one-off gains.** Check it against operating margin
+  before believing a cheap headline multiple.
+- **A low multiple on peak cyclical earnings is not value.** Memory, refining and shipping
+  routinely screen at 5–13× forward at the top of their cycle.
 - **Rating actions are parsed from headline text**, so they sample what the newswire
   surfaced rather than recording every analyst action.
 - **Small-cap price targets often rest on 4–8 estimates** and swing on one revision.
 
 ## Not investment advice
 
-This is a descriptive ranking of published numbers. "Screens undervalued" is a
-different claim from "will go up", and stocks that screen cheap are usually cheap for
-reasons informed people believe in. Nothing here is a recommendation to buy or sell
-anything. For decisions you will act on, talk to a licensed adviser.
+This is a descriptive ranking of published numbers. "Screens undervalued" is a different
+claim from "will go up", and stocks that screen cheap are usually cheap for reasons
+informed people believe in. Nothing here is a recommendation to buy or sell anything.
+For decisions you will act on, talk to a licensed adviser.
 
 ## License
 

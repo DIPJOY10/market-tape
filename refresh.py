@@ -461,28 +461,17 @@ def export_rows(univ, ratings, hist=None, today=None, series=None):
     return rows
 
 
-LOCAL_HEAD = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<style>
-  :root{color-scheme:light dark}
-  html,body{margin:0}
-  body{font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
-  img{max-width:100%}
-  [hidden]{display:none!important}
-</style>
-"""
-
-def standalone(html):
-    """The published artifact is wrapped in a doctype/head skeleton by the host.
-    A file opened straight from disk gets none of that, so supply it here or the
-    browser renders the page in quirks mode."""
-    head, sep, body = html.partition("</style>")
-    if not sep:                      # template shape changed; ship it unwrapped
+# The Vite build emits a complete HTML document. That is exactly what we want on
+# disk, but a Claude Artifact supplies its own doctype/head wrapper, so that version
+# ships as head-contents plus body-contents with the wrapper removed.
+def strip_for_artifact(html):
+    head = re.search(r"<head[^>]*>(.*?)</head>", html, re.S)
+    body = re.search(r"<body[^>]*>(.*?)</body>", html, re.S)
+    if not head or not body:
         return html
-    return LOCAL_HEAD + head + sep + "\n</head>\n<body>\n" + body + "\n</body>\n</html>\n"
+    h = head.group(1)
+    h = re.sub(r"<meta[^>]*>", "", h)        # host provides charset + viewport
+    return h.strip() + "\n" + body.group(1).strip() + "\n"
 
 
 def main():
@@ -512,24 +501,29 @@ def main():
     have_sp = sum(1 for r in rows if r.get("ch"))
     sect = sector_table(univ)
 
-    tmpl = (HERE / "page.tmpl.html").read_text()
+    tmpl_path = HERE / "page.tmpl.html"
+    if not tmpl_path.exists():
+        raise SystemExit("page.tmpl.html missing - build the UI first:\n"
+                         "  cd web && npm install && npm run build && npm run sync")
+    tmpl = tmpl_path.read_text()
+    meta = {"asof": now.strftime("%-d %b %Y"),
+            "genat": now.strftime("%-d %b %Y, %-I:%M%p").lower(),
+            "rows": len(rows), "universe": len(univ), "actions": n_acts}
     html = (tmpl.replace("__ROWS__", json.dumps(rows, separators=(",", ":")))
                 .replace("__TAPE__", json.dumps(tape, separators=(",", ":")))
                 .replace("__SECT__", json.dumps(sect, separators=(",", ":")))
-                .replace("__ASOF__", now.strftime("%-d %b %Y"))
-                .replace("__GENAT__", now.strftime("%-d %b %Y, %-I:%M%p").lower())
-                .replace("__NROWS__", str(len(rows)))
-                .replace("__NSCREEN__", f"{len(univ):,}")
-                .replace("__NACTS__", str(n_acts)))
-    out = BUILD / "index.html"; out.write_text(html)
-    (BUILD / "local.html").write_text(standalone(html))
+                .replace("__META__", json.dumps(meta, separators=(",", ":"))))
+    (BUILD / "local.html").write_text(html)
+    out = BUILD / "index.html"
+    out.write_text(strip_for_artifact(html))
     json.dump(rows, open(CACHE / "rows.json", "w"), separators=(",", ":"))
     json.dump(tape, open(CACHE / "tape.json", "w"), indent=1)
     json.dump(sect, open(CACHE / "sect.json", "w"), indent=1)
     json.dump({"generated": now.isoformat(), "universe": len(univ), "rows": len(rows),
                "actions": n_acts}, open(CACHE / "meta.json", "w"), indent=1)
-    print(f"\n  wrote {out}  ({out.stat().st_size // 1024} KB)   [publish this one]")
-    print(f"  wrote {BUILD / 'local.html'}   [standalone, opens in any browser]")
+    print(f"\n  wrote {BUILD / 'local.html'}  "
+          f"({(BUILD / 'local.html').stat().st_size // 1024} KB)   [open this one]")
+    print(f"  wrote {out}   [publish this one as the Artifact]")
     print(f"  {len(rows)} rows from {len(univ):,} screened, {n_acts} rating actions")
     print(f"  2-day momentum on {have_2d}/{len(rows)} names, charts on {have_sp}")
     print(f"  done in {time.time() - t0:.0f}s")

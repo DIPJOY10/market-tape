@@ -1,9 +1,16 @@
 # generated output
 build/
 cache/
+web/dist/
 
 # local config: holds a private Claude Artifact URL
 artifact.json
+
+# your watchlist and its price history
+watchlist.db
+
+# node
+node_modules/
 
 # python
 __pycache__/
