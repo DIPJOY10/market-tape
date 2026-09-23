@@ -30,7 +30,7 @@ const CAVEATS = [
    "Consensus targets here imply large upside on dozens of names. In a tape where the median stock is falling, that usually means targets are stale rather than that returns are free."],
 ];
 
-export default function Notes({ meta }) {
+export default function Notes() {
   return (
     <>
       <section>
@@ -39,7 +39,7 @@ export default function Notes({ meta }) {
           <p>The AI trade is no longer the whole story.</p>
           <span className="stale">
             commentary written {WRITTEN} &mdash; every table in this app is live
-            {meta.asof ? ` (data ${meta.asof})` : ""}
+
           </span>
         </div>
         <div className="themes">

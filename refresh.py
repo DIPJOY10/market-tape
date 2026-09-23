@@ -530,8 +530,10 @@ def main():
     json.dump(rows, open(CACHE / "rows.json", "w"), separators=(",", ":"))
     json.dump(tape, open(CACHE / "tape.json", "w"), indent=1)
     json.dump(sect, open(CACHE / "sect.json", "w"), indent=1)
-    json.dump({"generated": now.isoformat(), "universe": len(univ), "rows": len(rows),
-               "actions": n_acts, "market": P["code"], "label": P["label"]},
+    # Cache the same object the page embeds, plus bookkeeping: the local server
+    # hands this to the market switcher, which needs the currency and tier labels
+    # as much as the page does.
+    json.dump({**meta, "generated": now.isoformat(), "label": P["label"]},
               open(CACHE / "meta.json", "w"), indent=1)
     print(f"\n  wrote {BUILD / 'local.html'}  "
           f"({(BUILD / 'local.html').stat().st_size // 1024} KB)   [open this one]")

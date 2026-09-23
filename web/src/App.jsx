@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ROWS, META } from "./data.js";
+import { MarketProvider, useMarket } from "./market.jsx";
 import { useWatchlist } from "./watchlist.js";
 import Header from "./components/Header.jsx";
 import Tabs from "./components/Tabs.jsx";
@@ -24,11 +24,12 @@ function tabFromHash() {
   return TABS.some(([id]) => id === h) ? h : "overview";
 }
 
-export default function App() {
+function Shell() {
   const [tab, setTab] = useState(tabFromHash);
   const [chartTicker, setChartTicker] = useState(null);
   const [focus, setFocus] = useState(null);          // ticker to reveal on the screen
-  const wl = useWatchlist(ROWS);
+  const { rows, code } = useMarket();
+  const wl = useWatchlist(rows);
 
   useEffect(() => {
     const onHash = () => setTab(tabFromHash());
@@ -52,37 +53,37 @@ export default function App() {
 
   return (
     <>
-      <Header meta={META} />
+      <Header />
       <Tabs tabs={TABS} active={tab} onChange={go} counts={counts} />
       <div className="wrap">
-        <ErrorBoundary label="This tab" resetKey={tab}>
+        <ErrorBoundary label="This tab" resetKey={tab + code}>
         {tab === "overview" && (
           <Overview onJump={jump} onChart={setChartTicker} wl={wl} />
         )}
         {tab === "screen" && (
-          <Screen focus={focus} onFocusDone={() => setFocus(null)}
+          <Screen key={code} focus={focus} onFocusDone={() => setFocus(null)}
                   onChart={setChartTicker} wl={wl} />
         )}
         {tab === "watchlist" && (
           <Watchlist wl={wl} onJump={jump} onChart={setChartTicker} />
         )}
         {tab === "sectors" && <Sectors />}
-        {tab === "notes" && <Notes meta={META} />}
+        {tab === "notes" && <Notes />}
         </ErrorBoundary>
         <footer>
-          <p><strong>Source &amp; timing.</strong> TradingView's live scanner for fundamentals,
-            prices, targets and consensus ratings; Yahoo's chart endpoint for daily price
-            history. Fundamentals are trailing twelve months unless labelled forward. Rating
-            actions are parsed from headline text over roughly the trailing three weeks and
-            are a sample, not a complete record.</p>
-          <p><strong>Scoring.</strong> Value, quality and growth are percentile ranks &mdash;
-            value within sector, quality and growth across the whole universe. These are
-            descriptive rankings of published numbers, not forecasts.</p>
-          <p><strong>This is not investment advice.</strong> Nothing here is a recommendation
-            to buy or sell any security. &ldquo;Undervalued&rdquo; means cheap against peers
-            and its own fundamentals on these metrics &mdash; a different claim from
-            &ldquo;will go up&rdquo;. Stocks that screen cheap are usually cheap for reasons a
-            lot of informed people believe in.</p>
+          <p className="src">
+            <strong>Data</strong> TradingView &mdash; fundamentals, consensus estimates and
+            price targets &middot; Yahoo Finance &mdash; daily price history. Fundamentals are
+            trailing twelve months unless marked forward. Rating actions are parsed from
+            headlines over the trailing three weeks.
+          </p>
+          <p className="src">
+            <strong>Method</strong> Value, quality and growth are percentile ranks &mdash;
+            value within sector, quality and growth across the universe. Short term blends
+            1W/1M/3M momentum, analyst sentiment and RSI; long term blends quality, growth,
+            valuation and leverage.
+          </p>
+          <p className="fine">For research purposes. Not investment advice.</p>
         </footer>
       </div>
       {chartTicker && (
@@ -92,5 +93,13 @@ export default function App() {
         </ErrorBoundary>
       )}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <MarketProvider>
+      <Shell />
+    </MarketProvider>
   );
 }

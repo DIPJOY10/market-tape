@@ -15,9 +15,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
 
 HERE = pathlib.Path(__file__).resolve().parent
-BUILD = HERE / "build"          # narrowed to the chosen market in main()
+BUILD = HERE / "build"
+CACHE = HERE / "cache"
 DB = HERE / "watchlist.db"
-MARKET = "us"
+MARKET = "us"                   # which market's page is served at /
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lists (
@@ -254,6 +255,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             return self._json({"ok": True, "market": MARKET})
 
+        if len(parts) == 4 and parts[1] == "data":
+            code = parts[2]
+            d = CACHE / code
+            if not (d / "rows.json").exists():
+                return self._json({"error": f"market {code} has not been pulled"}, 404)
+            try:
+                payload = {k: json.load(open(d / f"{k}.json"))
+                           for k in ("rows", "tape", "sect", "meta")}
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+            return self._json(payload)
+
         if path == "/api/markets":
             out = []
             for d in sorted((HERE / "build").glob("*")):
@@ -298,7 +311,12 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------------------------------------------------------- statics
     def _static(self, path):
-        rel = "local.html" if path in ("/", "/index.html") else path.lstrip("/")
+        if path in ("/", "/index.html"):
+            rel = f"{MARKET}/local.html"
+        else:
+            rel = path.lstrip("/")
+            if rel.endswith("/"):              # /in/ -> that market's page
+                rel += "local.html"
         target = (BUILD / rel).resolve()
         try:                                   # never serve outside build/
             target.relative_to(BUILD.resolve())
@@ -311,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global BUILD, MARKET
+    global MARKET
     ap = argparse.ArgumentParser(description="Serve Market Tape with a local watchlist")
     ap.add_argument("--port", type=int, default=8811)
     ap.add_argument("--market", default="us", help="which built market to serve")
@@ -319,10 +337,8 @@ def main():
     args = ap.parse_args()
 
     MARKET = args.market
-    BUILD = HERE / "build" / MARKET
-    if not (BUILD / "local.html").exists():
-        built = sorted(d.name for d in (HERE / "build").glob("*")
-                       if (d / "local.html").exists())
+    built = sorted(d.name for d in BUILD.glob("*") if (d / "local.html").exists())
+    if MARKET not in built:
         raise SystemExit(
             f"build/{MARKET}/local.html missing - run: python3 refresh.py --market {MARKET}"
             + (f"\nAlready built: {', '.join(built)}" if built else ""))
@@ -330,7 +346,8 @@ def main():
     init_db()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://localhost:{args.port}/"
-    print(f"Market Tape ({MARKET}) on {url}   (watchlist -> {DB.name})")
+    print(f"Market Tape on {url}   markets: {', '.join(built)}   "
+          f"(watchlist -> {DB.name})")
     if not args.no_open:
         webbrowser.open(url)
     try:

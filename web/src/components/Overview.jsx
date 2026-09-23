@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { ROWS, TIERS, eligible, covered } from "../data.js";
+import { eligible, covered } from "../data.js";
+import { useMarket } from "../market.jsx";
 import { fmtP, fmtPct, signClass, fmtNum } from "../format.js";
 import { StarButton } from "./Viz.jsx";
 
@@ -38,11 +39,12 @@ const top = (list, key, desc, n = 5) =>
   }).slice(0, n);
 
 export default function Overview({ onJump, wl }) {
+  const { rows: ROWS, tiers: TIERS } = useMarket();
   const picks = useMemo(() => TIERS.map(([tier, label]) => [
     tier, label,
     ROWS.filter((r) => r.tier === tier && eligible(r))
         .sort((a, b) => b.sc - a.sc).slice(0, 6),
-  ]), []);
+  ]), [ROWS, TIERS]);
 
   const cards = useMemo(() => {
     const cov = ROWS.filter(covered);
@@ -88,7 +90,7 @@ export default function Overview({ onJump, wl }) {
           sub: r.oh != null ? `${r.oh.toFixed(0)}% off high` : "",
         }))],
     ];
-  }, []);
+  }, [ROWS]);
 
   return (
     <>

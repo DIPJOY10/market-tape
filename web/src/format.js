@@ -1,4 +1,12 @@
-import { CURRENCY, CAP_UNITS } from "./data.js";
+// The active market's currency, set by MarketProvider during render. Module state
+// rather than a prop because these formatters are called from every component.
+let CURRENCY = "$";
+let CAP_UNITS = "western";
+
+export function setLocale({ symbol, capUnits }) {
+  CURRENCY = symbol || "$";
+  CAP_UNITS = capUnits || "western";
+}
 
 export const DASH = "–";
 

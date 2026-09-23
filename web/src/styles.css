@@ -313,3 +313,30 @@ footer p{margin:0 0 7px}
   border-radius:6px;padding:11px 14px;font-size:12.5px;margin:0 0 14px}
 .wl-warn code{font-family:var(--mono);font-size:11.5px;background:var(--surf);
   padding:1px 5px;border-radius:3px}
+
+/* ---------- market switcher ---------- */
+.top-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.mkt{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mkt-pills{display:flex;gap:3px;background:var(--surf2);border:1px solid var(--line);
+  border-radius:6px;padding:3px}
+.mkt-pill{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--muted);
+  background:none;border:none;padding:6px 13px;border-radius:4px;cursor:pointer;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+.mkt-pill:hover:not(:disabled){color:var(--ink)}
+.mkt-pill[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.mkt-pill:disabled{cursor:progress;opacity:.75}
+.mkt-pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mkt-load{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;
+  border-top-color:transparent;animation:mkt-spin .7s linear infinite}
+@keyframes mkt-spin{to{transform:rotate(360deg)}}
+.mkt-err{color:var(--neg);font-size:12px}
+@media (prefers-reduced-motion:reduce){.mkt-load{animation:none}}
+
+/* ---------- footer provenance ---------- */
+footer .src{margin:0 0 8px;font-size:11.5px;line-height:1.55;color:var(--faint);
+  max-width:82ch}
+footer .src strong{color:var(--muted);font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;font-size:10px;margin-right:7px}
+footer .fine{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line2);
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.wl-confirm{font-size:12.5px;color:var(--ink)}

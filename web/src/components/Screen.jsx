@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ROWS, SECTORS } from "../data.js";
+import { useMarket } from "../market.jsx";
 import { fmtCap, fmtMoney, fmtNum, fmtPct, signClass, recLabel, DASH } from "../format.js";
 import { StarButton } from "./Viz.jsx";
 import RowDetail from "./RowDetail.jsx";
@@ -28,6 +28,7 @@ const TIER_CHIPS = [["", "All"], ["Mega", "Mega"], ["Large", "Large"],
                     ["Mid", "Mid"], ["Small", "Small"]];
 
 export default function Screen({ focus, onFocusDone, onChart, wl }) {
+  const { rows: ROWS, sectors: SECTORS } = useMarket();
   const [q, setQ] = useState("");
   const [tier, setTier] = useState("");
   const [sector, setSector] = useState("");
@@ -74,7 +75,7 @@ export default function Screen({ focus, onFocusDone, onChart, wl }) {
       return dir * (x - y);
     });
     return out;
-  }, [q, tier, sector, aiOnly, profOnly, watchOnly, sort, wl]);
+  }, [ROWS, q, tier, sector, aiOnly, profOnly, watchOnly, sort, wl]);
 
   const clickHead = (c) => {
     if (c.sortable === false) return;

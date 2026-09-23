@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { byTicker } from "../data.js";
+import { useMarket } from "../market.jsx";
 import { fmtP, fmtMoney, fmtNum, fmtPct, signClass, recLabel, DASH } from "../format.js";
 import { Sparkline } from "./Viz.jsx";
 
@@ -16,9 +16,10 @@ function daysHeld(item) {
 }
 
 export default function Watchlist({ wl, onJump, onChart }) {
+  const { byTicker } = useMarket();
   const rows = useMemo(
     () => wl.items.map((i) => ({ item: i, row: byTicker.get(i.ticker) || null })),
-    [wl.items]
+    [wl.items, byTicker]
   );
 
   const totals = useMemo(() => {
@@ -31,7 +32,7 @@ export default function Watchlist({ wl, onJump, onChart }) {
     };
   }, [rows]);
 
-  const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState(null);     // null | "create" | "rename" | "confirm-delete"
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState("");
   const active = wl.lists.find((l) => l.id === wl.activeId);
@@ -40,21 +41,28 @@ export default function Watchlist({ wl, onJump, onChart }) {
     e.preventDefault();
     const res = await wl.createList(draft);
     if (res && res.error) { setErr(res.error); return; }
-    setDraft(""); setErr(""); setCreating(false);
+    setDraft(""); setErr(""); setMode(null);
   };
 
-  const rename = async () => {
-    const next = prompt("Rename this list", active ? active.name : "");
-    if (next == null) return;
-    const res = await wl.renameList(wl.activeId, next);
-    if (res && res.error) setErr(res.error);
+  // prompt() and confirm() are blocked in embedded contexts and in the published
+  // Artifact, so renaming and deleting are inline instead of native dialogs.
+  const startRename = () => {
+    setDraft(active ? active.name : "");
+    setErr("");
+    setMode("rename");
   };
 
-  const drop = async () => {
-    if (!active) return;
-    if (!confirm("Delete \"" + active.name + "\" and everything on it?")) return;
+  const submitRename = async (e) => {
+    e.preventDefault();
+    const res = await wl.renameList(wl.activeId, draft);
+    if (res && res.error) { setErr(res.error); return; }
+    setDraft(""); setMode(null);
+  };
+
+  const confirmDrop = async () => {
     const res = await wl.deleteList(wl.activeId);
-    if (res && res.error) setErr(res.error);
+    if (res && res.error) { setErr(res.error); setMode(null); return; }
+    setMode(null);
   };
 
   return (
@@ -78,23 +86,38 @@ export default function Watchlist({ wl, onJump, onChart }) {
             </button>
           ))}
         </div>
-        {creating ? (
-          <form className="wl-new" onSubmit={submitNew}>
-            <input autoFocus value={draft} maxLength={60} placeholder="List name"
-                   aria-label="New list name"
+        {mode === "create" || mode === "rename" ? (
+          <form className="wl-new"
+                onSubmit={mode === "create" ? submitNew : submitRename}>
+            <input autoFocus value={draft} maxLength={60}
+                   placeholder={mode === "create" ? "List name" : "New name"}
+                   aria-label={mode === "create" ? "New list name" : "Rename list"}
                    onChange={(e) => { setDraft(e.target.value); setErr(""); }} />
-            <button className="btn" type="submit">Create</button>
+            <button className="btn" type="submit">
+              {mode === "create" ? "Create" : "Save"}
+            </button>
             <button className="btn" type="button"
-                    onClick={() => { setCreating(false); setDraft(""); setErr(""); }}>
+                    onClick={() => { setMode(null); setDraft(""); setErr(""); }}>
               Cancel
             </button>
           </form>
+        ) : mode === "confirm-delete" ? (
+          <div className="wl-actions">
+            <span className="wl-confirm">
+              Delete {active ? active.name : "this list"} and everything on it?
+            </span>
+            <button className="btn danger" onClick={confirmDrop}>Delete</button>
+            <button className="btn" onClick={() => setMode(null)}>Cancel</button>
+          </div>
         ) : (
           <div className="wl-actions">
-            <button className="btn" onClick={() => setCreating(true)}>+ New list</button>
-            {active && <button className="btn" onClick={rename}>Rename</button>}
+            <button className="btn" onClick={() => { setDraft(""); setMode("create"); }}>
+              + New list
+            </button>
+            {active && <button className="btn" onClick={startRename}>Rename</button>}
             {wl.lists.length > 1 && (
-              <button className="btn danger" onClick={drop}>Delete list</button>
+              <button className="btn danger"
+                      onClick={() => setMode("confirm-delete")}>Delete list</button>
             )}
           </div>
         )}

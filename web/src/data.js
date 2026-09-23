@@ -1,34 +1,27 @@
-// The pipeline injects these as inert JSON script tags at build-data time.
+// The pipeline injects the active market's payload as inert JSON script tags.
+// Other markets are fetched from the local server at runtime, if one is running.
 function readJSON(id, fallback) {
   const el = document.getElementById(id);
   if (!el) return fallback;
   try {
     const txt = el.textContent.trim();
-    if (!txt || txt.startsWith("__")) return fallback;  // placeholder, never filled
+    if (!txt || txt.startsWith("__")) return fallback;   // placeholder, never filled
     return JSON.parse(txt);
   } catch {
     return fallback;
   }
 }
 
-export const ROWS = readJSON("mt-rows", []);
-export const TAPE = readJSON("mt-tape", []);
-export const SECT = readJSON("mt-sect", []);
-export const META = readJSON("mt-meta", {});
+export const EMBEDDED = {
+  rows: readJSON("mt-rows", []),
+  tape: readJSON("mt-tape", []),
+  sect: readJSON("mt-sect", []),
+  meta: readJSON("mt-meta", {}),
+};
 
-export const byTicker = new Map(ROWS.map((r) => [r.t, r]));
-
-export const SECTORS = [...new Set(ROWS.map((r) => r.sec).filter(Boolean))].sort();
-
-// Currency and tier labels come from the active market profile, so the UI reads
-// correctly whether the pipeline pulled US dollars or Indian rupees.
-export const CURRENCY = META.symbol || "$";
-export const CAP_UNITS = META.capUnits || "western";
-export const MARKET = META.marketLabel || "United States";
-
-export const TIERS = META.tiers && META.tiers.length
-  ? META.tiers
-  : [["Mega", ">$200B"], ["Large", "$10-200B"], ["Mid", "$2-10B"], ["Small", "<$2B"]];
+export const DEFAULT_TIERS = [
+  ["Mega", ">$200B"], ["Large", "$10-200B"], ["Mid", "$2-10B"], ["Small", "<$2B"],
+];
 
 // Shared gate for "top picks": profitable, covered, not over-levered.
 export function eligible(r) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { byTicker } from "../data.js";
+import { useMarket } from "../market.jsx";
 import { RANGES, sliceRange, bounds, maLabel } from "../chart.js";
 import { fmtP, fmtPct, fmtDate, signClass } from "../format.js";
 import { MomentumLadder, StarButton } from "./Viz.jsx";
@@ -21,6 +21,7 @@ function useWidth(ref) {
 }
 
 export default function ChartModal({ ticker, onClose, wl }) {
+  const { byTicker } = useMarket();
   const row = byTicker.get(ticker);
   const [range, setRange] = useState("6M");
   const [hover, setHover] = useState(null);

@@ -1,10 +1,11 @@
 import React from "react";
-import { SECT } from "../data.js";
+import { useMarket } from "../market.jsx";
 import { fmtPct, signClass } from "../format.js";
 
 const COLS = ["YTD", "3M", "1M", "Fwd P/E", "ROIC", "Rev growth", "Target upside"];
 
 export default function Sectors() {
+  const { sect: SECT } = useMarket();
   const maxAbs = Math.max(1, ...SECT.map((r) => Math.abs(r[2])));
   return (
     <section>
