@@ -73,8 +73,11 @@ export function bounds(d) {
     const vals = m.filter((v) => v != null);
     if (vals.length > 2) sets.push(vals);
   }
-  let lo = Math.min(...sets.map((a) => Math.min(...a)));
-  let hi = Math.max(...sets.map((a) => Math.max(...a)));
-  const pad = (hi - lo) * 0.08 || 1;
-  return { lo: lo - pad, hi: hi + pad };
+  const rawLo = Math.min(...sets.map((a) => Math.min(...a)));
+  const hi = Math.max(...sets.map((a) => Math.max(...a)));
+  const pad = (hi - rawLo) * 0.08 || 1;
+  // Across a long range the padding can push the floor below zero, which would
+  // print a negative price on the axis. A share price never is.
+  const lo = rawLo >= 0 ? Math.max(0, rawLo - pad) : rawLo - pad;
+  return { lo, hi: hi + pad };
 }

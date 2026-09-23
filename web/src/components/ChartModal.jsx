@@ -123,8 +123,9 @@ export default function ChartModal({ ticker, onClose, wl }) {
                   </g>
                 );
               })}
-              {Array.from({ length: Math.min(5, geom.n) }, (_, i, a) => {
-                const ticks = a.length;
+              {(() => {
+                const ticks = Math.min(5, geom.n);
+                return Array.from({ length: ticks }, (_, i) => {
                 const ti = Math.round((i / (ticks - 1 || 1)) * (geom.n - 1));
                 const anchor = i === 0 ? "start" : i === ticks - 1 ? "end" : "middle";
                 const long = range === "1Y" || range === "5Y" || range === "YTD";
@@ -132,7 +133,8 @@ export default function ChartModal({ ticker, onClose, wl }) {
                   <text key={i} x={geom.X(ti).toFixed(1)} y={H - 8} className="ax"
                         textAnchor={anchor}>{fmtDate(d.ts[ti], long)}</text>
                 );
-              })}
+                });
+              })()}
               {maPath(d.ma200) && (
                 <path d={maPath(d.ma200)} fill="none" stroke="var(--faint)"
                       strokeWidth="1.2" strokeDasharray="1 4" opacity=".85" />

@@ -9,6 +9,7 @@ import Watchlist from "./components/Watchlist.jsx";
 import Sectors from "./components/Sectors.jsx";
 import Notes from "./components/Notes.jsx";
 import ChartModal from "./components/ChartModal.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 const TABS = [
   ["overview", "Overview"],
@@ -54,6 +55,7 @@ export default function App() {
       <Header meta={META} />
       <Tabs tabs={TABS} active={tab} onChange={go} counts={counts} />
       <div className="wrap">
+        <ErrorBoundary label="This tab" resetKey={tab}>
         {tab === "overview" && (
           <Overview onJump={jump} onChart={setChartTicker} wl={wl} />
         )}
@@ -66,6 +68,7 @@ export default function App() {
         )}
         {tab === "sectors" && <Sectors />}
         {tab === "notes" && <Notes meta={META} />}
+        </ErrorBoundary>
         <footer>
           <p><strong>Source &amp; timing.</strong> TradingView's live scanner for fundamentals,
             prices, targets and consensus ratings; Yahoo's chart endpoint for daily price
@@ -83,7 +86,10 @@ export default function App() {
         </footer>
       </div>
       {chartTicker && (
-        <ChartModal ticker={chartTicker} onClose={() => setChartTicker(null)} wl={wl} />
+        <ErrorBoundary label="The chart" resetKey={chartTicker}
+                       onDismiss={() => setChartTicker(null)}>
+          <ChartModal ticker={chartTicker} onClose={() => setChartTicker(null)} wl={wl} />
+        </ErrorBoundary>
       )}
     </>
   );
