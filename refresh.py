@@ -180,21 +180,23 @@ def return_path(v):
     return pts if len(pts) >= 3 else None
 
 # ------------------------------------------------- daily price series (charts)
-SPARK_POINTS = 64        # points kept per sparkline after downsampling
-YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/{}?range=6mo&interval=1d"
+DAILY_SESSIONS = 252         # ~1 trading year kept at full daily resolution
+WEEKLY_STRIDE = 5            # every 5th session ~= weekly, for the 5-year view
+YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/{}?range=5y&interval=1d"
+
 
 def fetch_series(rows, workers=16):
-    """Daily closes from Yahoo's public chart endpoint - one call per symbol, no auth.
-    Best effort: a symbol that will not resolve simply gets no chart, and the page
-    falls back to the return path reconstructed from TradingView's horizon returns."""
-    print(f"  fetching price history for {len(rows)} symbols ...", flush=True)
+    """Five years of daily closes from Yahoo's public chart endpoint - one call per
+    symbol, no auth. Best effort: a symbol that will not resolve simply gets no chart,
+    and the page falls back to the path reconstructed from TradingView's returns."""
+    print(f"  fetching 5y price history for {len(rows)} symbols ...", flush=True)
 
     def one(name):
         sym = name.replace(".", "-")          # BRK.B -> BRK-B, Yahoo's spelling
         try:
             req = urllib.request.Request(YAHOO.format(urllib.parse.quote(sym)),
                                          headers={"User-Agent": "Mozilla/5.0"})
-            d = json.load(urllib.request.urlopen(req, timeout=20))
+            d = json.load(urllib.request.urlopen(req, timeout=25))
             r = (d.get("chart") or {}).get("result")
             if not r:
                 return name, None
@@ -215,29 +217,37 @@ def fetch_series(rows, workers=16):
     return out
 
 
-def downsample(pts, n=SPARK_POINTS):
-    """Even stride down to n points, always keeping the newest close."""
-    if len(pts) <= n:
-        return pts
-    step = (len(pts) - 1) / (n - 1)
-    idx = sorted({min(len(pts) - 1, round(i * step)) for i in range(n)})
-    if idx[-1] != len(pts) - 1:
-        idx.append(len(pts) - 1)
-    return [pts[i] for i in idx]
-
-
-def spark(pts):
-    """Compact sparkline: closes normalised to 0-1000 ints plus the real bounds,
-    so the page can redraw the true shape without shipping full floats."""
-    if not pts or len(pts) < 8:
-        return None
-    ds = downsample(pts)
-    vals = [c for _, c in ds]
+def _pack(sub, scale, with_offsets):
+    """Closes normalised to 0..scale ints plus the real bounds, so the page can rebuild
+    true prices (price = lo + v/scale * (hi-lo)) without shipping full floats."""
+    vals = [c for _, c in sub]
     lo, hi = min(vals), max(vals)
     span = (hi - lo) or 1.0
-    return {"v": [round((c - lo) / span * 1000) for c in vals],
-            "lo": round(lo, 4), "hi": round(hi, 4),
-            "t0": int(ds[0][0]), "t1": int(ds[-1][0])}
+    blob = {"v": [round((c - lo) / span * scale) for c in vals],
+            "lo": round(lo, 4), "hi": round(hi, 4), "s": scale,
+            "t0": int(sub[0][0]), "t1": int(sub[-1][0])}
+    if with_offsets:
+        # exact calendar day offsets, so short-range hovers name the right session
+        d0 = datetime.date.fromtimestamp(sub[0][0])
+        blob["o"] = [(datetime.date.fromtimestamp(t) - d0).days for t, _ in sub]
+    return blob
+
+
+def chart_blob(pts):
+    """Daily for the last trading year, weekly for five years, plus the index where
+    the current calendar year begins so the YTD range can be sliced exactly."""
+    if not pts or len(pts) < 30:
+        return None
+    daily = pts[-DAILY_SESSIONS:]
+    weekly = pts[::WEEKLY_STRIDE]
+    if weekly[-1][0] != pts[-1][0]:
+        weekly = weekly + [pts[-1]]
+    jan1 = datetime.date(datetime.date.fromtimestamp(pts[-1][0]).year, 1, 1)
+    ytd_idx = next((i for i, (t, _) in enumerate(daily)
+                    if datetime.date.fromtimestamp(t) >= jan1), 0)
+    return {"d": _pack(daily, 10000, True),     # fine scale: hover prices stay accurate
+            "w": _pack(weekly, 1000, False),    # coarse is fine across five years
+            "yi": ytd_idx}
 
 
 def series_2day(pts):
@@ -245,6 +255,7 @@ def series_2day(pts):
     if not pts or len(pts) < 3:
         return None
     return (pts[-1][1] / pts[-3][1] - 1) * 100
+
 
 # ------------------------------------------------------------------- scoring
 def num(x):
@@ -433,7 +444,7 @@ def export_rows(univ, ratings, hist=None, today=None, series=None):
           "d1": R(v.get("change"), 1),
           "d2": R(series_2day((series or {}).get(v["name"]))
                   or (two_day(hist, v["ticker"], v["px"], today) if hist else None), 1),
-          "sp": spark((series or {}).get(v["name"])),
+          "ch": chart_blob((series or {}).get(v["name"])),
           "w1": R(v.get("Perf.W"), 1), "m1": R(v.get("Perf.1M"), 1),
           "m3": R(v.get("Perf.3M"), 1), "m6": R(v.get("Perf.6M"), 1),
           "y1": R(v.get("Perf.Y"), 1), "rsi": R(v.get("RSI"), 0), "oh": R(v.get("off_high"), 1),
@@ -498,7 +509,7 @@ def main():
     rows = export_rows(univ, ratings, hist, today, series)  # with charts + exact 2D
     json.dump(hist, open(CACHE / "history.json", "w"), separators=(",", ":"))
     have_2d = sum(1 for r in rows if r.get("d2") is not None)
-    have_sp = sum(1 for r in rows if r.get("sp"))
+    have_sp = sum(1 for r in rows if r.get("ch"))
     sect = sector_table(univ)
 
     tmpl = (HERE / "page.tmpl.html").read_text()
@@ -520,7 +531,7 @@ def main():
     print(f"\n  wrote {out}  ({out.stat().st_size // 1024} KB)   [publish this one]")
     print(f"  wrote {BUILD / 'local.html'}   [standalone, opens in any browser]")
     print(f"  {len(rows)} rows from {len(univ):,} screened, {n_acts} rating actions")
-    print(f"  2-day momentum on {have_2d}/{len(rows)} names, sparklines on {have_sp}")
+    print(f"  2-day momentum on {have_2d}/{len(rows)} names, charts on {have_sp}")
     print(f"  done in {time.time() - t0:.0f}s")
     cfg = HERE / "artifact.json"
     if cfg.exists():

@@ -24,9 +24,14 @@ About 20 seconds for a full run.
 ranked by a composite score. Sort any column, filter by cap tier or sector, search,
 and click any row to expand it.
 
-**Per-symbol detail** — six months of daily closes with the 50- and 200-day moving
-averages drawn in, position within the 52-week range, a momentum ladder spanning
-2 days to 1 year, the full metric set, industry competitors, and recent analyst actions.
+**Per-symbol detail** — a six-month sparkline, position within the 52-week range, a
+momentum ladder spanning 2 days to 1 year, the full metric set, industry competitors,
+and recent analyst actions.
+
+**Full chart view** — click any sparkline to open a chart with selectable ranges
+(1M / 3M / 6M / YTD / 1Y / 5Y), price and date axes, 50- and 200-day moving averages,
+and a crosshair that reports the close, the date and the change from the range start
+for any session. Daily resolution out to one year, weekly across five.
 
 **Top of the screen** — best composite score per cap tier, plus metric extremes:
 largest target upside, most upgrades, most downgrades, cheapest high-quality names,
@@ -38,7 +43,8 @@ strongest and weakest momentum.
 
 ```bash
 python3 refresh.py               # full pull, writes build/index.html + build/local.html
-python3 refresh.py --no-charts   # skip per-symbol price history (faster)
+python3 refresh.py --no-charts   # skip price history: faster, and a ~600KB page
+                                 # instead of ~2MB
 python3 digest.py                # plain-text top picks and metric extremes
 python3 fresh.py 4               # exit 0 if cached data is under 4 hours old
 ```
@@ -78,7 +84,7 @@ Tiers: Mega >$200B · Large $10–200B · Mid $2–10B · Small <$2B.
 | Source | Used for | Auth |
 |---|---|---|
 | `scanner.tradingview.com` | fundamentals, prices, targets, consensus ratings | none |
-| `query1.finance.yahoo.com` | daily price history for charts and exact 2-day moves | none |
+| `query1.finance.yahoo.com` | 5y daily price history for charts and exact 2-day moves | none |
 | `news-mediator.tradingview.com` | headlines, parsed for analyst rating actions | none |
 
 These are public, undocumented endpoints. They can change or rate-limit without

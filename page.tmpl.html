@@ -54,6 +54,56 @@ section{margin-top:34px}
 .shead h2{font-size:20px}
 .shead p{margin:0;color:var(--muted);font-size:13px}
 
+/* full chart modal */
+.spark-btn{display:block;width:100%;padding:0;background:none;border:1px solid transparent;
+  border-radius:5px;cursor:pointer;text-align:left;color:inherit;font:inherit}
+.spark-btn:hover{border-color:var(--line);background:var(--surf)}
+.spark-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.spark-btn .expand{color:var(--accent);font-weight:600}
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));
+  padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.modal-bg{position:absolute;inset:0;background:rgba(9,14,16,.62);backdrop-filter:blur(2px)}
+.modal-card{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:8px;
+  box-shadow:var(--shadow);width:min(860px,100%);max-height:100%;overflow-y:auto;
+  padding:18px 20px 20px}
+.modal-x{position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:5px;
+  border:1px solid var(--line);background:var(--surf2);color:var(--muted);font-size:16px;
+  line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.modal-x:hover{color:var(--ink);border-color:var(--faint)}
+.modal-x:focus-visible,.m-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.m-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-right:34px}
+.m-head h3{font-size:22px;font-family:var(--disp)}
+.m-head .nm{color:var(--muted);font-size:13px;flex:1 1 140px;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.m-head .px{font-family:var(--mono);font-size:19px;font-weight:500}
+.m-head .cg{font-family:var(--mono);font-size:12px}
+.m-tabs{display:flex;gap:3px;margin:14px 0 4px;background:var(--surf2);border:1px solid var(--line);
+  border-radius:6px;padding:3px;width:fit-content;max-width:100%;overflow-x:auto}
+.m-tab{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);background:none;
+  border:none;padding:6px 13px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.m-tab[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.m-chart{margin-top:6px;min-height:210px}
+.m-chart svg{display:block;width:100%;height:auto;touch-action:none}
+text.ax{font-family:var(--mono);font-size:9.5px;fill:var(--faint)}
+.m-read{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;font-family:var(--mono);
+  font-size:11.5px;min-height:20px;padding:7px 0;border-bottom:1px solid var(--line2)}
+.m-read .hint{color:var(--faint);font-style:italic}
+.m-read .rd-d{color:var(--muted)} .m-read .rd-p{font-size:14px;font-weight:500}
+.m-read .rd-m{color:var(--faint)}
+.m-foot{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;
+  color:var(--muted);padding:9px 0 4px}
+.m-foot b{font-weight:600} .m-foot .ma-key{color:var(--faint);margin-left:auto}
+.m-mom{margin-top:12px;padding-top:13px;border-top:1px solid var(--line2)}
+.m-mom h4{font-family:var(--disp);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 9px;font-weight:700}
+@media (max-width:560px){
+  .modal{padding:8px}
+  .modal-card{padding:15px 14px 16px}
+  .m-head h3{font-size:18px}
+  .m-foot .ma-key{margin-left:0;width:100%}
+}
+
 /* charts */
 .chart{display:flex;flex-direction:column;gap:13px}
 .spark-wrap{position:relative}
@@ -314,6 +364,31 @@ footer p{margin:0 0 7px}
 </footer>
 </div>
 
+<div class="modal" id="cmodal" hidden>
+  <div class="modal-bg"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+    <button class="modal-x" aria-label="Close chart">&times;</button>
+    <div class="m-head">
+      <h3 id="mtitle"></h3>
+      <span class="px" id="mpx"></span>
+      <span class="cg" id="mchg"></span>
+      <span class="nm" id="mname"></span>
+    </div>
+    <div class="m-tabs" role="group" aria-label="Chart range">
+      <button class="m-tab" data-range="1M" aria-pressed="false">1M</button>
+      <button class="m-tab" data-range="3M" aria-pressed="false">3M</button>
+      <button class="m-tab" data-range="6M" aria-pressed="true">6M</button>
+      <button class="m-tab" data-range="YTD" aria-pressed="false">YTD</button>
+      <button class="m-tab" data-range="1Y" aria-pressed="false">1Y</button>
+      <button class="m-tab" data-range="5Y" aria-pressed="false">5Y</button>
+    </div>
+    <div class="m-chart" id="mchart"></div>
+    <div class="m-read" id="mread"></div>
+    <div class="m-foot" id="mfoot"></div>
+    <div class="m-mom"><h4>Momentum</h4><div id="mmom"></div></div>
+  </div>
+</div>
+
 <script type="application/json" id="rows">__ROWS__</script>
 <script>
 (function(){
@@ -326,35 +401,65 @@ document.getElementById("tape").innerHTML=TAPE.map(function(t){
  return '<div class="tick"><div class="k">'+t.k+'</div><div class="v">'+t.v+
         '</div><div class="d '+t.c+'">'+t.d+'</div></div>';}).join("");
 
-/* ---------- per-symbol chart: 6-month price, 52w range, momentum ladder ---------- */
-function fmtP(x){
-  if(x==null) return "\u2013";
-  return "$"+(Math.abs(x)>=100?x.toLocaleString(undefined,{maximumFractionDigits:0}):x.toFixed(2));
+/* ---------- per-symbol charts ---------- */
+/* ---------- price series helpers ---------- */
+function unpack(p){                      /* ints back to real prices */
+  var span=p.hi-p.lo, sc=p.s||1000;
+  return p.v.map(function(u){return p.lo+u/sc*span;});
 }
-function drawSpark(sp,s50,s200){
-  if(!sp||!sp.v||sp.v.length<8) return "";
-  var v=sp.v,n=v.length,W=260,H=56,PAD=3;
+function unpackT(p){                     /* real epoch ms per point */
+  if(p.o) return p.o.map(function(d){return (p.t0+d*86400)*1000;});
+  var n=p.v.length, step=(p.t1-p.t0)/((n-1)||1);
+  return p.v.map(function(_,i){return (p.t0+step*i)*1000;});
+}
+function rollMean(a,k){                  /* trailing mean; null until k points exist */
+  var out=[],sum=0;
+  for(var i=0;i<a.length;i++){
+    sum+=a[i];
+    if(i>=k) sum-=a[i-k];
+    out.push(i>=k-1?sum/k:null);
+  }
+  return out;
+}
+var RANGES=[["1M",22],["3M",63],["6M",126],["YTD","ytd"],["1Y",252],["5Y","w"]];
+
+function sliceRange(ch,key){
+  /* returns {px,ts,ma50,ma200,label} for the chosen range, or null */
+  if(!ch) return null;
+  var src,per50,per200;
+  if(key==="5Y"){ src=ch.w; per50=10; per200=40; }      /* weekly: 50d~10w, 200d~40w */
+  else          { src=ch.d; per50=50; per200=200; }
+  if(!src||!src.v||src.v.length<5) return null;
+  var px=unpack(src), ts=unpackT(src);
+  var m50=rollMean(px,per50), m200=rollMean(px,per200);
+  var from=0;
+  if(key==="YTD") from=Math.min(ch.yi||0,px.length-2);
+  else if(key!=="5Y"&&key!=="1Y"){
+    var want=0; RANGES.forEach(function(r){if(r[0]===key) want=r[1];});
+    from=Math.max(0,px.length-want);
+  }
+  return {px:px.slice(from),ts:ts.slice(from),
+          ma50:m50.slice(from),ma200:m200.slice(from),key:key};
+}
+
+/* ---------- inline sparkline in the expanded row ---------- */
+function drawSpark(ch){
+  var d=sliceRange(ch,"6M"); if(!d) return "";
+  var px=d.px,n=px.length,W=260,H=56,PAD=3;
+  var lo=Math.min.apply(null,px), hi=Math.max.apply(null,px), span=(hi-lo)||1;
   var X=function(i){return PAD+i/(n-1)*(W-2*PAD);};
-  var Y=function(u){return H-PAD-(u/1000)*(H-2*PAD);};
-  var pts=v.map(function(u,i){return X(i).toFixed(1)+","+Y(u).toFixed(1);});
-  var rising=v[n-1]>=v[0], col=rising?"var(--pos)":"var(--neg)";
-  var span=(sp.hi-sp.lo)||1;
-  var ma=function(val,dash){                 /* a moving average, drawn only if on-scale */
-    if(val==null||val<sp.lo||val>sp.hi) return "";
-    var y=Y((val-sp.lo)/span*1000).toFixed(1);
-    return '<line x1="'+PAD+'" y1="'+y+'" x2="'+(W-PAD)+'" y2="'+y+
-           '" stroke="var(--faint)" stroke-width="1" stroke-dasharray="'+dash+'" opacity=".7"></line>';
-  };
-  var lx=X(n-1).toFixed(1), ly=Y(v[n-1]).toFixed(1);
+  var Y=function(p){return H-PAD-((p-lo)/span)*(H-2*PAD);};
+  var pts=px.map(function(p,i){return X(i).toFixed(1)+","+Y(p).toFixed(1);});
+  var col=px[n-1]>=px[0]?"var(--pos)":"var(--neg)";
   return '<svg class="spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" '+
-    'role="img" aria-label="Six month daily close">'+
+    'role="img" aria-label="Six month price, click to enlarge">'+
     '<path d="M'+pts.join(" L")+' L'+X(n-1).toFixed(1)+','+(H-PAD)+' L'+PAD+','+(H-PAD)+
       ' Z" fill="'+col+'" opacity=".12"></path>'+
-    ma(s200,"1 3")+ma(s50,"3 2")+
     '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+
       '" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></polyline>'+
-    '<circle cx="'+lx+'" cy="'+ly+'" r="2.4" fill="'+col+'"></circle></svg>';
+    '<circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(px[n-1]).toFixed(1)+'" r="2.4" fill="'+col+'"></circle></svg>';
 }
+
 function drawRange(px,lo,hi){
   if(px==null||lo==null||hi==null||hi<=lo) return "";
   var pos=Math.max(0,Math.min(1,(px-lo)/(hi-lo)));
@@ -370,7 +475,7 @@ function drawMom(r){
     var val=h[1];
     if(val==null) return '<div class="mom-row"><span class="h">'+h[0]+'</span>'+
       '<span class="mom-bar"><span class="zero"></span></span>'+
-      '<span class="n" style="color:var(--faint)">\u2013</span></div>';
+      '<span class="n" style="color:var(--faint)">–</span></div>';
     var w=Math.min(50,Math.abs(val)/mx*50), pos=val>=0;
     var style=pos?('left:50%;width:'+w.toFixed(1)+'%;background:var(--pos)')
                  :('right:50%;width:'+w.toFixed(1)+'%;background:var(--neg)');
@@ -379,13 +484,23 @@ function drawMom(r){
       '<span class="n '+(pos?"up":"dn")+'">'+(pos?"+":"")+val.toFixed(1)+'%</span></div>';
   }).join("")+'</div>';
 }
+function fmtP(x){
+  if(x==null) return "–";
+  return "$"+(Math.abs(x)>=100?x.toLocaleString(undefined,{maximumFractionDigits:0})
+                              :x.toFixed(2));
+}
+function fmtD(ms,longer){
+  var d=new Date(ms);
+  return d.toLocaleDateString(undefined,longer?{year:"numeric",month:"short",day:"numeric"}
+                                               :{month:"short",day:"numeric"});
+}
 function chartBlock(r){
-  var sl=drawSpark(r.sp,r.s50,r.s200);
-  var head=sl?'<div class="spark-wrap">'+sl+'<div class="spark-meta"><span>6 months</span><span>'+
-      (r.s50!=null?'\u2013\u2013 50d '+fmtP(r.s50)+'   ':'')+
-      (r.s200!=null?'\u00b7\u00b7\u00b7 200d '+fmtP(r.s200):'')+'</span><span>'+
-      fmtP(r.sp.lo)+' \u2013 '+fmtP(r.sp.hi)+'</span></div></div>'
-    :'<p class="none">No price history resolved for this symbol.</p>';
+  var sl=drawSpark(r.ch);
+  var head=sl
+    ? '<button class="spark-btn" data-chart="'+r.t+'" aria-label="Open full chart for '+r.t+'">'+
+      sl+'<span class="spark-meta"><span>6 months</span><span class="expand">Full chart ↗</span></span>'+
+      '</button>'
+    : '<p class="none">No price history resolved for this symbol.</p>';
   return '<div class="dblk"><h4>Price &amp; momentum</h4><div class="chart">'+
     head+drawRange(r.px,r.lo,r.hi)+drawMom(r)+'</div></div>';
 }
@@ -644,6 +759,182 @@ document.getElementById("aiOnly").addEventListener("click",function(){
   state.ai=!state.ai;this.setAttribute("aria-pressed",String(state.ai));openIdx=null;render();});
 document.getElementById("profOnly").addEventListener("click",function(){
   state.prof=!state.prof;this.setAttribute("aria-pressed",String(state.prof));openIdx=null;render();});
+/* ---------- full chart modal ---------- */
+var CS={t:null,range:"6M",idx:null};
+var modal=document.getElementById("cmodal");
+
+function rowFor(t){for(var i=0;i<ROWS.length;i++){if(ROWS[i].t===t)return ROWS[i];}return null;}
+
+function plot(d,W,H){
+  var n=d.px.length;
+  if(n<2) return "";
+  var L=8,R=58,T=14,B=26;
+  var pw=W-L-R, ph=H-T-B;
+  var series=[d.px];
+  [d.ma50,d.ma200].forEach(function(m){
+    var vals=m.filter(function(v){return v!=null;});
+    if(vals.length>2) series.push(vals);
+  });
+  var lo=Math.min.apply(null,series.map(function(a){return Math.min.apply(null,a);}));
+  var hi=Math.max.apply(null,series.map(function(a){return Math.max.apply(null,a);}));
+  var pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad;
+  var span=(hi-lo)||1;
+  var X=function(i){return L+(n===1?0:i/(n-1)*pw);};
+  var Y=function(p){return T+ph-((p-lo)/span)*ph;};
+
+  var out=[],i;
+  /* gridlines + price axis */
+  for(i=0;i<=4;i++){
+    var gp=lo+span*i/4, gy=Y(gp).toFixed(1);
+    out.push('<line x1="'+L+'" y1="'+gy+'" x2="'+(L+pw)+'" y2="'+gy+
+      '" stroke="var(--line)" stroke-width="1" opacity=".55"></line>');
+    out.push('<text x="'+(L+pw+7)+'" y="'+(+gy+3.5).toFixed(1)+
+      '" class="ax">'+fmtP(gp)+'</text>');
+  }
+  /* date axis */
+  var ticks=Math.min(5,n), longer=(d.key==="1Y"||d.key==="5Y"||d.key==="YTD");
+  for(i=0;i<ticks;i++){
+    var ti=Math.round(i/(ticks-1||1)*(n-1)), tx=X(ti);
+    var anchor=i===0?"start":(i===ticks-1?"end":"middle");
+    out.push('<text x="'+tx.toFixed(1)+'" y="'+(H-8)+'" class="ax" text-anchor="'+anchor+
+      '">'+fmtD(d.ts[ti],longer)+'</text>');
+  }
+  /* moving averages */
+  function maPath(m,dash,lab){
+    var seg=[],started=false;
+    for(var k=0;k<n;k++){
+      if(m[k]==null){started=false;continue;}
+      seg.push((started?"L":"M")+X(k).toFixed(1)+","+Y(m[k]).toFixed(1));
+      started=true;
+    }
+    if(seg.length<3) return "";
+    return '<path d="'+seg.join(" ")+'" fill="none" stroke="var(--faint)" stroke-width="1.2" '+
+           'stroke-dasharray="'+dash+'" opacity=".85"></path>';
+  }
+  out.push(maPath(d.ma200,"1 4"));
+  out.push(maPath(d.ma50,"4 3"));
+  /* price area + line */
+  var up=d.px[n-1]>=d.px[0], col=up?"var(--pos)":"var(--neg)";
+  var pts=d.px.map(function(p,k){return X(k).toFixed(1)+","+Y(p).toFixed(1);});
+  out.push('<path d="M'+pts.join(" L")+' L'+X(n-1).toFixed(1)+','+(T+ph)+' L'+L+','+(T+ph)+
+    ' Z" fill="'+col+'" opacity=".10"></path>');
+  out.push('<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+
+    '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"></polyline>');
+  /* crosshair, positioned by pointer handlers */
+  out.push('<g id="cross" opacity="0"><line id="cx" y1="'+T+'" y2="'+(T+ph)+
+    '" stroke="var(--ink)" stroke-width="1" opacity=".45"></line>'+
+    '<circle id="cdot" r="3.5" fill="'+col+'" stroke="var(--surf)" stroke-width="1.5"></circle></g>');
+
+  return '<svg id="csvg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+
+    '" role="img" aria-label="Price chart">'+out.join("")+'</svg>';
+}
+
+function renderChart(){
+  var r=rowFor(CS.t); if(!r) return;
+  var d=sliceRange(r.ch,CS.range);
+  var host=document.getElementById("mchart");
+  if(!d){host.innerHTML='<p class="none">No data for this range.</p>';return;}
+  CS.d=d;
+  var W=Math.max(280,host.clientWidth||600);
+  var H=Math.max(200,Math.min(360,Math.round(W*0.42)));
+  host.innerHTML=plot(d,W,H);
+  var chg=(d.px[d.px.length-1]/d.px[0]-1)*100;
+  var lo=Math.min.apply(null,d.px), hi=Math.max.apply(null,d.px);
+  document.getElementById("mfoot").innerHTML=
+    '<span><b class="'+(chg>=0?"up":"dn")+'">'+(chg>=0?"+":"")+chg.toFixed(1)+'%</b> over '+CS.range+'</span>'+
+    '<span>range low '+fmtP(lo)+'</span><span>high '+fmtP(hi)+'</span>'+
+    '<span class="ma-key">–– '+maLab(CS.range,0)+
+    '  ··· '+maLab(CS.range,1)+'</span>';
+  setRead(null);
+  Array.prototype.forEach.call(modal.querySelectorAll(".m-tab"),function(b){
+    b.setAttribute("aria-pressed",String(b.dataset.range===CS.range));});
+  wireCross();
+}
+
+function maLab(range,slow){           /* a weekly series means weekly averages */
+  if(range==="5Y") return slow?"40w":"10w";
+  return slow?"200d":"50d";
+}
+function setRead(i){
+  var d=CS.d, el=document.getElementById("mread");
+  if(!d){el.textContent="";return;}
+  if(i==null){
+    el.innerHTML='<span class="hint">Hover the chart for any session</span>';
+    return;
+  }
+  var p=d.px[i], base=d.px[0], ch=(p/base-1)*100;
+  el.innerHTML='<span class="rd-d">'+fmtD(d.ts[i],true)+'</span>'+
+    '<span class="rd-p">'+fmtP(p)+'</span>'+
+    '<span class="'+(ch>=0?"up":"dn")+'">'+(ch>=0?"+":"")+ch.toFixed(1)+'% from range start</span>'+
+    (d.ma50[i]!=null?'<span class="rd-m">'+maLab(d.key,0)+' '+fmtP(d.ma50[i])+'</span>':'')+
+    (d.ma200[i]!=null?'<span class="rd-m">'+maLab(d.key,1)+' '+fmtP(d.ma200[i])+'</span>':'');
+}
+
+function wireCross(){
+  var svg=document.getElementById("csvg"); if(!svg) return;
+  var d=CS.d, n=d.px.length, L=8, R=58, T=14, B=26;
+  var W=svg.viewBox.baseVal.width, H=svg.viewBox.baseVal.height;
+  var pw=W-L-R, ph=H-T-B;
+  var g=svg.querySelector("#cross"), cx=svg.querySelector("#cx"), dot=svg.querySelector("#cdot");
+  function at(ev){
+    var rect=svg.getBoundingClientRect();
+    var px=(ev.clientX-rect.left)*(W/rect.width);
+    var i=Math.round((px-L)/(pw||1)*(n-1));
+    i=Math.max(0,Math.min(n-1,i));
+    var x=L+(n===1?0:i/(n-1)*pw);
+    var lo=Math.min.apply(null,d.px),hi=Math.max.apply(null,d.px);
+    var series=[d.px]; [d.ma50,d.ma200].forEach(function(m){
+      var v=m.filter(function(z){return z!=null;}); if(v.length>2) series.push(v);});
+    lo=Math.min.apply(null,series.map(function(a){return Math.min.apply(null,a);}));
+    hi=Math.max.apply(null,series.map(function(a){return Math.max.apply(null,a);}));
+    var pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad;
+    var y=T+ph-((d.px[i]-lo)/((hi-lo)||1))*ph;
+    cx.setAttribute("x1",x); cx.setAttribute("x2",x);
+    dot.setAttribute("cx",x); dot.setAttribute("cy",y);
+    g.setAttribute("opacity","1");
+    setRead(i);
+  }
+  svg.addEventListener("pointermove",at);
+  svg.addEventListener("pointerdown",at);
+  svg.addEventListener("pointerleave",function(){
+    g.setAttribute("opacity","0"); setRead(null);});
+}
+
+function openChart(t){
+  var r=rowFor(t); if(!r||!r.ch) return;
+  CS.t=t; CS.range="6M";
+  document.getElementById("mtitle").textContent=r.t;
+  document.getElementById("mname").textContent=r.n;
+  document.getElementById("mpx").textContent=fmtP(r.px);
+  var d1=r.d1;
+  document.getElementById("mchg").innerHTML=d1==null?"":
+    '<span class="'+(d1>=0?"up":"dn")+'">'+(d1>=0?"+":"")+d1.toFixed(2)+'% today</span>';
+  document.getElementById("mmom").innerHTML=drawMom(r);
+  modal.hidden=false;
+  document.body.style.overflow="hidden";
+  renderChart();
+  document.querySelector(".modal-x").focus();
+}
+function closeChart(){
+  modal.hidden=true; CS.t=null;
+  document.body.style.overflow="";
+}
+modal.addEventListener("click",function(e){
+  if(e.target.closest(".modal-x")||e.target.classList.contains("modal-bg")) closeChart();
+  var tab=e.target.closest(".m-tab");
+  if(tab){CS.range=tab.dataset.range; renderChart();}
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&!modal.hidden) closeChart();});
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-chart]");
+  if(b){e.stopPropagation(); openChart(b.getAttribute("data-chart"));}
+},true);
+var rsz;
+window.addEventListener("resize",function(){
+  if(modal.hidden) return;
+  clearTimeout(rsz); rsz=setTimeout(renderChart,120);});
+
 render();
 
 /* clicking a ticker anywhere above filters the screen to it */
