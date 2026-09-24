@@ -108,6 +108,18 @@ export default function ChartModal({ ticker, onClose, wl }) {
         </div>
 
         <div className="m-chart" ref={hostRef}>
+          {hover != null && d && geom && (
+            <span className="chart-tip" style={{
+              left: `${Math.max(6, Math.min(94, (geom.X(hover) / W) * 100))}%`,
+              top: `${Math.max(0, (geom.Y(d.px[hover]) / H) * 100 - 2)}%`,
+            }}>
+              <span className="tp-px">{fmtP(d.px[hover])}</span>
+              <span className="tp-dt">{fmtDate(d.ts[hover], true)}</span>
+              <span className={"tp-ch " + signClass(d.px[hover] / d.px[0] - 1)}>
+                {fmtPct((d.px[hover] / d.px[0] - 1) * 100)} from range start
+              </span>
+            </span>
+          )}
           {!d ? <p className="none">No data for this range.</p> : (
             <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img"
                  aria-label={`${row.t} price over ${range}`}

@@ -80,7 +80,7 @@ section{margin-top:34px}
 .m-tab{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);background:none;
   border:none;padding:6px 13px;border-radius:4px;cursor:pointer;white-space:nowrap}
 .m-tab[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
-.m-chart{margin-top:6px;min-height:210px}
+.m-chart{margin-top:6px;min-height:210px;position:relative}
 .m-chart svg{display:block;width:100%;height:auto;touch-action:none}
 text.ax{font-family:var(--mono);font-size:9.5px;fill:var(--faint)}
 .m-read{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;font-family:var(--mono);
@@ -340,3 +340,18 @@ footer .src strong{color:var(--muted);font-weight:600;letter-spacing:.04em;
 footer .fine{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line2);
   font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .wl-confirm{font-size:12.5px;color:var(--ink)}
+
+/* ---------- chart hover tooltips ---------- */
+.spark-hold{position:relative}
+.spark-tip{position:absolute;top:-4px;transform:translate(-50%,-100%);
+  background:var(--surf);border:1px solid var(--line);border-radius:4px;
+  padding:4px 8px;box-shadow:var(--shadow);white-space:nowrap;pointer-events:none;
+  display:flex;flex-direction:column;gap:1px;z-index:5}
+.spark-tip b{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)}
+.spark-tip i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--faint)}
+.chart-tip{position:absolute;transform:translate(-50%,-100%);background:var(--surf);
+  border:1px solid var(--line);border-radius:5px;padding:6px 10px;box-shadow:var(--shadow);
+  white-space:nowrap;pointer-events:none;z-index:5;display:flex;flex-direction:column;gap:2px}
+.chart-tip .tp-px{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink)}
+.chart-tip .tp-dt{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.chart-tip .tp-ch{font-family:var(--mono);font-size:10.5px}

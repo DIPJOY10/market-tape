@@ -1,25 +1,57 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { sliceRange, bounds } from "../chart.js";
-import { fmtP, fmtPct, signClass } from "../format.js";
+import { fmtP, fmtPct, fmtDate, signClass } from "../format.js";
 
-export function Sparkline({ ch, w = 260, h = 56 }) {
-  const d = sliceRange(ch, "6M");
+export function Sparkline({ ch, w = 260, h = 56, interactive = true }) {
+  const [hover, setHover] = useState(null);
+  const d = useMemo(() => sliceRange(ch, "6M"), [ch]);
   if (!d) return null;
+
   const { px } = d, n = px.length, PAD = 3;
   const lo = Math.min(...px), hi = Math.max(...px), span = hi - lo || 1;
   const X = (i) => PAD + (i / (n - 1)) * (w - 2 * PAD);
   const Y = (p) => h - PAD - ((p - lo) / span) * (h - 2 * PAD);
   const pts = px.map((p, i) => `${X(i).toFixed(1)},${Y(p).toFixed(1)}`);
   const col = px[n - 1] >= px[0] ? "var(--pos)" : "var(--neg)";
+
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (w / rect.width);
+    const i = Math.round(((x - PAD) / (w - 2 * PAD)) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, i)));
+  };
+
+  // Keep the bubble inside the chart rather than letting it run off an edge.
+  const tipLeft = hover == null ? 0
+    : Math.max(0, Math.min(100, (X(hover) / w) * 100));
+
   return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"
-         role="img" aria-label="Six month price">
-      <path d={`M${pts.join(" L")} L${X(n - 1).toFixed(1)},${h - PAD} L${PAD},${h - PAD} Z`}
-            fill={col} opacity=".12" />
-      <polyline points={pts.join(" ")} fill="none" stroke={col} strokeWidth="1.6"
-                strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={X(n - 1).toFixed(1)} cy={Y(px[n - 1]).toFixed(1)} r="2.4" fill={col} />
-    </svg>
+    <div className="spark-hold">
+      <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"
+           role="img" aria-label="Six month price"
+           onPointerMove={interactive ? onMove : undefined}
+           onPointerLeave={interactive ? () => setHover(null) : undefined}>
+        <path d={`M${pts.join(" L")} L${X(n - 1).toFixed(1)},${h - PAD} L${PAD},${h - PAD} Z`}
+              fill={col} opacity=".12" />
+        <polyline points={pts.join(" ")} fill="none" stroke={col} strokeWidth="1.6"
+                  strokeLinejoin="round" strokeLinecap="round" />
+        {hover != null && (
+          <g>
+            <line x1={X(hover)} y1={PAD} x2={X(hover)} y2={h - PAD}
+                  stroke="var(--ink)" strokeWidth="1" opacity=".4" />
+            <circle cx={X(hover)} cy={Y(px[hover])} r="2.8" fill={col}
+                    stroke="var(--surf)" strokeWidth="1.5" />
+          </g>
+        )}
+        <circle cx={X(n - 1).toFixed(1)} cy={Y(px[n - 1]).toFixed(1)} r="2.4" fill={col} />
+      </svg>
+      {hover != null && (
+        <span className="spark-tip" style={{ left: `${tipLeft}%` }}>
+          <b>{fmtP(px[hover])}</b>
+          <i>{fmtDate(d.ts[hover])}</i>
+        </span>
+      )}
+    </div>
   );
 }
 
