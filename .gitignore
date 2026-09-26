@@ -6,8 +6,12 @@ web/dist/
 # local config: holds a private Claude Artifact URL
 artifact.json
 
-# your watchlist and its price history
+# your watchlists and their price history, including any local backups
 watchlist.db
+watchlist.db*
+*.db
+*.db-journal
+*.db-wal
 
 # node
 node_modules/
